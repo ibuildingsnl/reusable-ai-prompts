@@ -1,6 +1,6 @@
 ---
 name: asvs-audit
-version: 1.6.1
+version: 1.6.2
 asvs-version: 5.0.0
 description: Performs a comprehensive security audit of the provided codebase against the OWASP Application Security Verification Standard (ASVS) 5.0 Level 1. Use this when asked for a asvs or security audit
 ---
@@ -10,16 +10,20 @@ description: Performs a comprehensive security audit of the provided codebase ag
 This skill performs a comprehensive security audit of the provided codebase against the **OWASP Application Security Verification Standard (ASVS) 5.0 level 1**. It systematically evaluates the code to identify potential vulnerabilities, compliance gaps, and areas for improvement, providing detailed findings and actionable remediation advice.
 
 ## Role
+
 You are an expert Application Security Engineer and Auditor with deep knowledge of OWASP standards, secure coding practices, and common vulnerability classes (CWEs). You are thorough, objective, and focused on practical risk reduction. You provide clear, evidence-based findings and actionable remediation advice.
 
 ## Prerequisites
+
 - **Git**: Required for retrieving version/commit info (optional but recommended)
 - **Read access**: Full read access to the target codebase
 - **File search/grep**: Ability to search files by pattern and content
 - **Terminal access**: For running git and other diagnostic commands
 
 ## Exclusions
+
 Skip these directories and files during analysis (they contain third-party or generated code):
+
 - `node_modules/`, `vendor/`, `packages/` (dependency directories)
 - `dist/`, `build/`, `out/`, `target/`, `.next/` (build outputs)
 - `.git/`, `.svn/`, `.hg/` (version control)
@@ -35,13 +39,13 @@ Skip these directories and files during analysis (they contain third-party or ge
 
 These rules exist to ensure different models/agents produce consistent results and **fully adhere** to the instructions.
 
-1.  **CSV is the source of truth**: You MUST load and iterate the bundled CSV at `./assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv`. Do not use a different ASVS list.
-2.  **Deterministic ordering**: Assign **Internal Item # = row order in the CSV** (first row is #1, last row is #70). **Do not sort** by `req_id` or any other field.
-3.  **No truncation of requirements**: Wherever `Requirement` appears, you MUST include the **exact full `req_description` text** from the CSV for that row.
-4.  **Avoid token-limit failures**: The report is large. Always write the full report to the required Markdown file via the `create_file` tool. Output only a brief status summary in chat and rely on the saved report for the complete 70-item content.
-5.  **No silent skipping**: If a check cannot be verified due to missing context (e.g., repo not available, insufficient permissions, or tooling limitations), record it as a **FAIL** with the lowest justified severity (often 🟢 Low) and explain what evidence is missing.
-6.  **Exactly 70 items**: Each Internal Item # from 1 to 70 must appear exactly once either as a Findings block or as a single row in the Verification Summary table.
-7.  **Evidence is mandatory**: Every item must include an **Evidence** entry.
+1. **CSV is the source of truth**: You MUST load and iterate the bundled CSV at `./assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv`. Do not use a different ASVS list.
+2. **Deterministic ordering**: Assign **Internal Item # = row order in the CSV** (first row is #1, last row is #70). **Do not sort** by `req_id` or any other field.
+3. **No truncation of requirements**: Wherever `Requirement` appears, you MUST include the **exact full `req_description` text** from the CSV for that row.
+4. **Avoid token-limit failures**: The report is large. Always write the full report to the required Markdown file via the `create_file` tool. Output only a brief status summary in chat and rely on the saved report for the complete 70-item content.
+5. **No silent skipping**: If a check cannot be verified due to missing context (e.g., repo not available, insufficient permissions, or tooling limitations), record it as a **FAIL** with the lowest justified severity (often 🟢 Low) and explain what evidence is missing.
+6. **Exactly 70 items**: Each Internal Item # from 1 to 70 must appear exactly once either as a Findings block or as a single row in the Verification Summary table.
+7. **Evidence is mandatory**: Every item must include an **Evidence** entry.
 
         *   For **✅ PASS**: include a concrete pointer such as `path/to/file.ext:line` and/or a specific config key/value, route name, middleware, or library feature.  
         *   For **⚪ N/A**: write `N/A - feature not present` and (if possible) a short reason such as `N/A - feature not present (no WebSocket server/routes found)`.  
@@ -64,13 +68,15 @@ These rules exist to ensure different models/agents produce consistent results a
 
 > **Important (CSV location)**: The ASVS Level 1 CSV is bundled with this *skill* itself, not the target application repo being audited.
 > It is located in this skill’s own `assets/` directory (a sibling of this `SKILL.md`).
-> 
+>
 > **Path Resolution**:
+>
 > - **Skill workspace path**: The directory containing this `SKILL.md` file (e.g., `/home/username/.copilot/skills/asvs-audit/`)
 > - **CSV absolute path**: `{skill_workspace}/assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv`
 > - When using tools, always resolve to the **absolute path** to avoid ambiguity
 >
 > **Context Switching**: This audit operates across TWO directories:
+>
 > 1. **Skill workspace**: Where this `SKILL.md` and `assets/` folder reside (for reading the CSV)
 > 2. **Target repo**: The application being audited (for all code analysis and git commands)
 >
@@ -81,10 +87,11 @@ These rules exist to ensure different models/agents produce consistent results a
 
 ## Instructions
 
-1.  **Profile the Technology Stack (Context Locking)**:
-    *   **Create a "Context Manifest"**: Before starting the audit, explicitly define a "Context Manifest" in your thought process containing the **Language** (e.g., Python), **Framework** (e.g., Django), **Database**, **Libraries**, and **Project Type** (e.g., Monorepo, Microservice).
-    
+1. **Profile the Technology Stack (Context Locking)**:
+    - **Create a "Context Manifest"**: Before starting the audit, explicitly define a "Context Manifest" in your thought process containing the **Language** (e.g., Python), **Framework** (e.g., Django), **Database**, **Libraries**, and **Project Type** (e.g., Monorepo, Microservice).
+
         **Example Context Manifest**:
+
         ```
         ┌─────────────────────────────────────────────────┐
         │ CONTEXT MANIFEST                                │
@@ -98,70 +105,70 @@ These rules exist to ensure different models/agents produce consistent results a
         │ Components:   [web] frontend, [api] backend     │
         └─────────────────────────────────────────────────┘
         ```
-    
-    *   **Re-read Manifest**: You MUST re-read this manifest before evaluating *every single chapter* to ensure you don't hallucinate requirements (e.g., asking for Java spring security in a Node app).
-    *   **Context Lock**: Use this profile to deterministically mark items as **N/A**. (e.g., If the app is Node.js, `Spring Boot` or `Java` specific requirements are automatically **N/A**).
-    *   **Search Vocabulary**: Use strict keyword searches to locate high-risk areas. Search for:
-        *   *Auth & Session*: `login`, `signin`, `password`, `credential`, `JWT`, `session`, `cookie`, `token`, `logout`, `oauth`, `sso`, `acl`, `rbac`.
-        *   *Data & API*: `SELECT`, `INSERT`, `UPDATE`, `query`, `fetch`, `axios`, `http`, `request`, `proxy`, `graphql`, `endpoint`, `route`.
-        *   *Input & Files*: `params`, `body`, `upload`, `file`, `path`, `stream`, `import`, `serialize`, `deserialize`, `parse`, `xml`, `yaml`.
-        *   *Crypto & Secrets*: `encrypt`, `decrypt`, `hash`, `hmac`, `random`, `secret`, `key`, `aes`, `rsa`, `md5`, `sha`, `certificate`, `pem`.
-        *   *Output & Controls*: `html`, `render`, `escape`, `sanitize`, `validate`, `cors`, `csp`, `csrf`, `xss`, `helmet`, `admin`, `config`, `env`.
-        *   *Dangerous Patterns*: `eval`, `exec`, `shell`, `subprocess`, `spawn`, `popen`, `system`, `pickle`, `unpickle`, `unsafe`, `dangerously`, `innerHTML`, `outerHTML`, `document.write`, `fromCharCode`, `Function(`, `setTimeout(`, `setInterval(`.
-    *   **Search Batching**: To avoid excessive tool calls, batch related keyword searches:
-        *   Combine auth-related terms in one regex: `login|signin|password|credential|JWT|session`
-        *   Combine data/API terms: `SELECT|INSERT|query|fetch|axios|endpoint`
-        *   Use glob patterns for file types: `**/*.{ts,js,py,java,go}`
-    *   **False-Positive Handling**: Some patterns that appear insecure may be safe in context. Before marking as FAIL, verify:
-        *   **Framework-generated code**: Build tools may emit patterns like `eval()` in bundled output—check if the source is in `dist/`, `build/`, or similar (these should be excluded anyway).
-        *   **Safe wrappers**: A function named `safeEval` or `sandboxedExec` may implement proper controls—read the implementation before flagging.
-        *   **Test fixtures**: Intentionally insecure code in test files (e.g., `test/fixtures/vulnerable.js`) is not a production vulnerability.
-        *   **Documentation/comments**: Code samples in comments or markdown files are not executable vulnerabilities.
-        *   **Dead code**: If a dangerous function exists but is never called (no usages found), note as 🟢 Low with evidence: `dead code - no call sites found`.
-        *   **When uncertain**: Mark as `⚠️ NEEDS_REVIEW` with explanation rather than a false FAIL.
-    *   **Multi-Language / Monorepo Handling**:
-        *   If the codebase contains multiple services or languages, identify each distinct component (e.g., `frontend/`, `backend/`, `api-gateway/`).
-        *   Profile each component separately in the Tech Stack section.
-        *   For each ASVS requirement, evaluate ALL relevant components. A requirement only **PASS**es if ALL components pass.
-        *   In Evidence, prefix with component name: `[backend] src/auth/login.py:45`
-        *   If components have different tech stacks, note N/A items per-component: `N/A for frontend (React SPA), evaluated in backend`
 
-2.  **Retrieve Metadata**: Execute `git rev-parse --short HEAD` to get the git short hash. Also execute `git describe --tags --always` or check `package.json` (or similar) to get the application version. This information is required for the audit report header.
+    - **Re-read Manifest**: You MUST re-read this manifest before evaluating *every single chapter* to ensure you don't hallucinate requirements (e.g., asking for Java spring security in a Node app).
+    - **Context Lock**: Use this profile to deterministically mark items as **N/A**. (e.g., If the app is Node.js, `Spring Boot` or `Java` specific requirements are automatically **N/A**).
+    - **Search Vocabulary**: Use strict keyword searches to locate high-risk areas. Search for:
+        - *Auth & Session*: `login`, `signin`, `password`, `credential`, `JWT`, `session`, `cookie`, `token`, `logout`, `oauth`, `sso`, `acl`, `rbac`.
+        - *Data & API*: `SELECT`, `INSERT`, `UPDATE`, `query`, `fetch`, `axios`, `http`, `request`, `proxy`, `graphql`, `endpoint`, `route`.
+        - *Input & Files*: `params`, `body`, `upload`, `file`, `path`, `stream`, `import`, `serialize`, `deserialize`, `parse`, `xml`, `yaml`.
+        - *Crypto & Secrets*: `encrypt`, `decrypt`, `hash`, `hmac`, `random`, `secret`, `key`, `aes`, `rsa`, `md5`, `sha`, `certificate`, `pem`.
+        - *Output & Controls*: `html`, `render`, `escape`, `sanitize`, `validate`, `cors`, `csp`, `csrf`, `xss`, `helmet`, `admin`, `config`, `env`.
+        - *Dangerous Patterns*: `eval`, `exec`, `shell`, `subprocess`, `spawn`, `popen`, `system`, `pickle`, `unpickle`, `unsafe`, `dangerously`, `innerHTML`, `outerHTML`, `document.write`, `fromCharCode`, `Function(`, `setTimeout(`, `setInterval(`.
+    - **Search Batching**: To avoid excessive tool calls, batch related keyword searches:
+        - Combine auth-related terms in one regex: `login|signin|password|credential|JWT|session`
+        - Combine data/API terms: `SELECT|INSERT|query|fetch|axios|endpoint`
+        - Use glob patterns for file types: `**/*.{ts,js,py,java,go}`
+    - **False-Positive Handling**: Some patterns that appear insecure may be safe in context. Before marking as FAIL, verify:
+        - **Framework-generated code**: Build tools may emit patterns like `eval()` in bundled output—check if the source is in `dist/`, `build/`, or similar (these should be excluded anyway).
+        - **Safe wrappers**: A function named `safeEval` or `sandboxedExec` may implement proper controls—read the implementation before flagging.
+        - **Test fixtures**: Intentionally insecure code in test files (e.g., `test/fixtures/vulnerable.js`) is not a production vulnerability.
+        - **Documentation/comments**: Code samples in comments or markdown files are not executable vulnerabilities.
+        - **Dead code**: If a dangerous function exists but is never called (no usages found), note as 🟢 Low with evidence: `dead code - no call sites found`.
+        - **When uncertain**: Mark as `⚠️ NEEDS_REVIEW` with explanation rather than a false FAIL.
+    - **Multi-Language / Monorepo Handling**:
+        - If the codebase contains multiple services or languages, identify each distinct component (e.g., `frontend/`, `backend/`, `api-gateway/`).
+        - Profile each component separately in the Tech Stack section.
+        - For each ASVS requirement, evaluate ALL relevant components. A requirement only **PASS**es if ALL components pass.
+        - In Evidence, prefix with component name: `[backend] src/auth/login.py:45`
+        - If components have different tech stacks, note N/A items per-component: `N/A for frontend (React SPA), evaluated in backend`
 
-    *   **Working directory requirement**: Run git/version commands in the **audited application repo root**, not the skill workspace.
-    *   **Tooling fallback**: If git is unavailable or the target is not a git repo, set:
-        *   **Git Commit**: `unknown`
-        *   **App Version**: prefer a declared app version (e.g., `package.json`, `pyproject.toml`, `Cargo.toml`, `pom.xml`, `build.gradle`, `go.mod`). If not found, use `unknown`.
+2. **Retrieve Metadata**: Execute `git rev-parse --short HEAD` to get the git short hash. Also execute `git describe --tags --always` or check `package.json` (or similar) to get the application version. This information is required for the audit report header.
 
-3.  **Verify Against ASVS**: Systematically check the code against the OWASP ASVS 5.0 verification requirements using the CSV file **bundled with this skill** at `./assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv` (i.e., relative to this `SKILL.md`, not the audited repo).
-    *   **Search Strategy (Crucial)**:
-        *   **Check Dependencies First**: For library-based requirements (cryptography, cookies, headers), ALWAYS read `package.json`, `requirements.txt`, `pom.xml`, etc., BEFORE searching source code. Identifying a library version is faster and more accurate.
-        *   **Semantic vs. Grep**: Use `semantic_search` for abstract architectural concepts (e.g., "how is authentication architecture designed?") where keywords vary. Use `grep` or file search for specific tokens (e.g., `md5`, `dangerouslySetInnerHTML`, `sk-`).
-    *   **Use all items in the CSV file**: There are **EXACTLY 70** Level 1 requirements in this file. You must verify every single one.
-    *   **Assign an Internal Item Number (1 to 70)** to each requirement based on its sequential order in the CSV file.
-    *   **Verification Loop**: You must iterate through **ALL 70 items**. Do not skip any.
-    *   The CSV columns are `chapter_id`, `chapter_name`, `section_id`, `section_name`, `req_id`, `req_description`, `L`.
-    *   **Determine Status (Strict Deterministic Workflow)**:
-        *   **Step A (Existence Check)**: Search for the specific feature mentioned in the requirement (e.g., "File Upload", "WebSocket", "GraphQL"). If the feature is **NOT present** in the codebase/stack, mark as **⚪ N/A**. (Do NOT mark as PASS).
-            *   **⚠️ NEEDS_REVIEW**: If you cannot determine if a feature exists due to token limits, complex obfuscation, or tool failures, mark as `⚠️ NEEDS_REVIEW` instead of FAIL to avoid false positives.
-            *   **N/A guardrail (prevents overuse of N/A)**: Mark **⚪ N/A** only when the requirement clearly depends on a concrete, optional feature or technology that the application does not use (e.g., WebSockets, GraphQL, native mobile, a specific SSO protocol, file uploads). If the requirement is broadly applicable to most web apps (e.g., input validation, access control, logging, secure configuration), it is **NOT** N/A.
-            *   **Uncertainty rule**: If you are unsure whether a feature exists, treat it as **present** and proceed to Step B (do not mark N/A based on uncertainty).
-        *   **Step B (Control Verification)**: If the feature exists, look for the security control.
-            *   **✅ PASS**: You found **Explicit Evidence** (code or config) that implements the control. If a framework handles it by default (e.g., React escaping), it passes **ONLY IF** no disable-flags are found (e.g., `dangerouslySetInnerHTML`). **If you cannot point to a specific line of code or logic that secures the feature, it is NOT a PASS.**
-            *   **❌ FAIL (🔴/🟠/🟡/🟢)**: The feature exists, but the control is missing, explicitly disabled, or implemented incorrectly.
+    - **Working directory requirement**: Run git/version commands in the **audited application repo root**, not the skill workspace.
+    - **Tooling fallback**: If git is unavailable or the target is not a git repo, set:
+        - **Git Commit**: `unknown`
+        - **App Version**: prefer a declared app version (e.g., `package.json`, `pyproject.toml`, `Cargo.toml`, `pom.xml`, `build.gradle`, `go.mod`). If not found, use `unknown`.
 
-        *   **Step C (Documentation-Only Requirements)**: If a requirement is **purely about documentation** (e.g., written policies, architecture docs, documented procedures) and the documentation is **missing/insufficient**, classify it as a security finding.
-            *   Record the item as **❌ FAIL**.
-            *   Assign a severity of **🟢 Low**.
-            *   Evidence is required (e.g., `missing:security documentation/policies in repo` and what was searched).
+3. **Verify Against ASVS**: Systematically check the code against the OWASP ASVS 5.0 verification requirements using the CSV file **bundled with this skill** at `./assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv` (i.e., relative to this `SKILL.md`, not the audited repo).
+    - **Search Strategy (Crucial)**:
+        - **Check Dependencies First**: For library-based requirements (cryptography, cookies, headers), ALWAYS read `package.json`, `requirements.txt`, `pom.xml`, etc., BEFORE searching source code. Identifying a library version is faster and more accurate.
+        - **Semantic vs. Grep**: Use `semantic_search` for abstract architectural concepts (e.g., "how is authentication architecture designed?") where keywords vary. Use `grep` or file search for specific tokens (e.g., `md5`, `dangerouslySetInnerHTML`, `sk-`).
+    - **Use all items in the CSV file**: There are **EXACTLY 70** Level 1 requirements in this file. You must verify every single one.
+    - **Assign an Internal Item Number (1 to 70)** to each requirement based on its sequential order in the CSV file.
+    - **Verification Loop**: You must iterate through **ALL 70 items**. Do not skip any.
+    - The CSV columns are `chapter_id`, `chapter_name`, `section_id`, `section_name`, `req_id`, `req_description`, `L`.
+    - **Determine Status (Strict Deterministic Workflow)**:
+        - **Step A (Existence Check)**: Search for the specific feature mentioned in the requirement (e.g., "File Upload", "WebSocket", "GraphQL"). If the feature is **NOT present** in the codebase/stack, mark as **⚪ N/A**. (Do NOT mark as PASS).
+            - **⚠️ NEEDS_REVIEW**: If you cannot determine if a feature exists due to token limits, complex obfuscation, or tool failures, mark as `⚠️ NEEDS_REVIEW` instead of FAIL to avoid false positives.
+            - **N/A guardrail (prevents overuse of N/A)**: Mark **⚪ N/A** only when the requirement clearly depends on a concrete, optional feature or technology that the application does not use (e.g., WebSockets, GraphQL, native mobile, a specific SSO protocol, file uploads). If the requirement is broadly applicable to most web apps (e.g., input validation, access control, logging, secure configuration), it is **NOT** N/A.
+            - **Uncertainty rule**: If you are unsure whether a feature exists, treat it as **present** and proceed to Step B (do not mark N/A based on uncertainty).
+        - **Step B (Control Verification)**: If the feature exists, look for the security control.
+            - **✅ PASS**: You found **Explicit Evidence** (code or config) that implements the control. If a framework handles it by default (e.g., React escaping), it passes **ONLY IF** no disable-flags are found (e.g., `dangerouslySetInnerHTML`). **If you cannot point to a specific line of code or logic that secures the feature, it is NOT a PASS.**
+            - **❌ FAIL (🔴/🟠/🟡/🟢)**: The feature exists, but the control is missing, explicitly disabled, or implemented incorrectly.
 
-    *   **Severity rubric (apply consistently across models)**:
-        *   **🔴 Critical**: Direct, likely-exploitable weakness enabling account takeover, authorization bypass, remote code execution, or exfiltration of highly sensitive data with minimal prerequisites.
-        *   **🟠 High**: Exploitable weakness with significant impact (e.g., injection in a reachable path, broken access control with meaningful data exposure) but requiring more constraints than Critical.
-        *   **🟡 Medium**: Weakness requiring specific conditions, reduced impact, or partial control gaps (e.g., missing rate limiting on a non-critical endpoint, insufficient security event logging).
-        *   **🟢 Low**: Hardening/best-practice gap or missing evidence where impact is limited but still security-relevant.
+        - **Step C (Documentation-Only Requirements)**: If a requirement is **purely about documentation** (e.g., written policies, architecture docs, documented procedures) and the documentation is **missing/insufficient**, classify it as a security finding.
+            - Record the item as **❌ FAIL**.
+            - Assign a severity of **🟢 Low**.
+            - Evidence is required (e.g., `missing:security documentation/policies in repo` and what was searched).
 
-    *   **Default Severity by ASVS Chapter** (use as baseline, adjust based on actual impact):
+    - **Severity rubric (apply consistently across models)**:
+        - **🔴 Critical**: Direct, likely-exploitable weakness enabling account takeover, authorization bypass, remote code execution, or exfiltration of highly sensitive data with minimal prerequisites.
+        - **🟠 High**: Exploitable weakness with significant impact (e.g., injection in a reachable path, broken access control with meaningful data exposure) but requiring more constraints than Critical.
+        - **🟡 Medium**: Weakness requiring specific conditions, reduced impact, or partial control gaps (e.g., missing rate limiting on a non-critical endpoint, insufficient security event logging).
+        - **🟢 Low**: Hardening/best-practice gap or missing evidence where impact is limited but still security-relevant.
+
+    - **Default Severity by ASVS Chapter** (use as baseline, adjust based on actual impact):
 
         | ASVS Chapter | Default Severity | Rationale |
         |--------------|------------------|------------|
@@ -180,43 +187,43 @@ These rules exist to ensure different models/agents produce consistent results a
         | V13 API & Web Services | 🟠 High | API abuse, data exposure |
         | V14 Configuration | 🟡 Medium | Misconfig, hardening gaps |
 
-4.  **Identify Vulnerabilities**: Flag any code segments that fail to meet these standards or exhibit known effective security weaknesses (e.g., SQL Injection, XSS, broken access control).
-5.  **Report Findings**: Present the audit results in the structured format defined below. **CRITICAL: Every Level 1 requirement from the CSV must be included.**
-    *   **Detailed Findings**: For any requirement with a severity of **Critical, High, Medium, or Low**, provide a full detailed block including location, description, and remediation. **Include the Internal Item Number.** **CRITICAL: The `Requirement` field must contain the EXACT FULL text from the CSV. Do NOT summarize or truncate it.**
-    *   **Summary of Passing Items**: For requirements that **PASS** or **⚪ N/A**, list them in a summary table at the end.
-        *   **ASVS ID column format**: Combine Internal Item # and `req_id` by **prefixing** the `req_id` with the Internal Item #, e.g., `#1 V1.2.1`.
-        *   **Chapter/Section column format**: Combine `chapter_name` and `section_name` into one column, with the `section_name` on a second line separated by a Markdown line break (`<br>`).
-        *   **Requirement column**: Must contain the EXACT FULL `req_description` text from the CSV. Do NOT summarize or truncate it.
-    *   **Validation**: **CRITICAL**: The final report MUST contain exactly **70 items**. Verify that the count of (Detailed Findings) + (Summary Table Rows) equals **70**. If the count is < 70, you have missed items. Go back to the CSV and process the missing ones.
-    *   **Deterministic completeness check**: Verify that Internal Item # covers the full set `{1..70}` with no duplicates and no missing numbers.
-6.  **Recommend Remediation**: For each finding (non-passing items), provide specific, actionable code examples or configuration changes.
-7.  **Save Report**: Use the `create_file` tool to save the report to `{project-name}-ASVS-L1-audit-YYYY-MM-DD.md` (e.g., `myapp-ASVS-L1-audit-2025-01-15.md`). Derive the project name from `package.json#name`, `pyproject.toml#name`, the git repo name, or the root folder name.
-    *   **Strict Template Adherence**: The file content MUST strictly follow the structure defined in the **"Output Format"** section below.
-    *   **Incremental Saving (Crucial)**: To avoid data loss, you MUST append/update this file **after every ASVS Chapter**. Do not wait until the end to write the file.
-    *   **Reliability note**: Do not rely on the chat window to carry the complete 70-item report.
+4. **Identify Vulnerabilities**: Flag any code segments that fail to meet these standards or exhibit known effective security weaknesses (e.g., SQL Injection, XSS, broken access control).
+5. **Report Findings**: Present the audit results in the structured format defined below. **CRITICAL: Every Level 1 requirement from the CSV must be included.**
+    - **Detailed Findings**: For any requirement with a severity of **Critical, High, Medium, or Low**, provide a full detailed block including location, description, and remediation. **Include the Internal Item Number.** **CRITICAL: The `Requirement` field must contain the EXACT FULL text from the CSV. Do NOT summarize or truncate it.**
+    - **Summary of Passing Items**: For requirements that **PASS** or **⚪ N/A**, list them in a summary table at the end.
+        - **ASVS ID column format**: Combine Internal Item # and `req_id` by **prefixing** the `req_id` with the Internal Item #, e.g., `#1 V1.2.1`.
+        - **Chapter/Section column format**: Combine `chapter_name` and `section_name` into one column, with the `section_name` on a second line separated by a Markdown line break (`<br>`).
+        - **Requirement column**: Must contain the EXACT FULL `req_description` text from the CSV. Do NOT summarize or truncate it.
+    - **Validation**: **CRITICAL**: The final report MUST contain exactly **70 items**. Verify that the count of (Detailed Findings) + (Summary Table Rows) equals **70**. If the count is < 70, you have missed items. Go back to the CSV and process the missing ones.
+    - **Deterministic completeness check**: Verify that Internal Item # covers the full set `{1..70}` with no duplicates and no missing numbers.
+6. **Recommend Remediation**: For each finding (non-passing items), provide specific, actionable code examples or configuration changes.
+7. **Save Report**: Use the `create_file` tool to save the report to `{project-name}-ASVS-L1-audit-YYYY-MM-DD.md` (e.g., `myapp-ASVS-L1-audit-2025-01-15.md`). Derive the project name from `package.json#name`, `pyproject.toml#name`, the git repo name, or the root folder name.
+    - **Strict Template Adherence**: The file content MUST strictly follow the structure defined in the **"Output Format"** section below.
+    - **Incremental Saving (Crucial)**: To avoid data loss, you MUST append/update this file **after every ASVS Chapter**. Do not wait until the end to write the file.
+    - **Reliability note**: Do not rely on the chat window to carry the complete 70-item report.
 
-8.  **Checkpoint & Resume Support**:
-    *   **Incremental State**: Maintain a temporary `asvs_state.json` or scratchpad if needed to track the last completed item number.
-    *   **Checkpointing**: If the audit must stop before completion (token limits, errors, user interruption):
-        1.  Ensure the report file is saved up to the last processed item.
-        2.  Add a `## Checkpoint` section at the end noting:
-            *   Last completed Internal Item #
-            *   Last completed Chapter/Section
-            *   Items remaining (count)
-            *   Reason for stopping
-    *   **Resuming**: If asked to resume a partial audit:
-        1.  Read the `[PARTIAL]` report to identify the last completed item
-        2.  Continue from the next Internal Item #
-        3.  Merge results into the final report
-        4.  Remove `[PARTIAL]` prefix and `## Checkpoint` section when complete
-    *   **Splitting by Chapter**: For very large codebases, the audit may be split:
-        *   User can request: "Audit chapters V1-V7 only"
-        *   Save as: `{project-name-ASVS-L1-audit-YYYY-MM-DD-V1-V7.md`
-        *   Note scope limitation in Summary section
+8. **Checkpoint & Resume Support**:
+    - **Incremental State**: Maintain a temporary `asvs_state.json` or scratchpad if needed to track the last completed item number.
+    - **Checkpointing**: If the audit must stop before completion (token limits, errors, user interruption):
+        1. Ensure the report file is saved up to the last processed item.
+        2. Add a `## Checkpoint` section at the end noting:
+            - Last completed Internal Item #
+            - Last completed Chapter/Section
+            - Items remaining (count)
+            - Reason for stopping
+    - **Resuming**: If asked to resume a partial audit:
+        1. Read the `[PARTIAL]` report to identify the last completed item
+        2. Continue from the next Internal Item #
+        3. Merge results into the final report
+        4. Remove `[PARTIAL]` prefix and `## Checkpoint` section when complete
+    - **Splitting by Chapter**: For very large codebases, the audit may be split:
+        - User can request: "Audit chapters V1-V7 only"
+        - Save as: `{project-name-ASVS-L1-audit-YYYY-MM-DD-V1-V7.md`
+        - Note scope limitation in Summary section
 
-9.  **Completion & Summary**:
-    *   Once the full report is saved, you MUST respond in the chat with a summary of the results.
-    *   Print the "Coverage Statistics" section from the report into the chat window so the user can see the high-level compliance status immediately.
+9. **Completion & Summary**:
+    - Once the full report is saved, you MUST respond in the chat with a summary of the results.
+    - Print the "Coverage Statistics" section from the report into the chat window so the user can see the high-level compliance status immediately.
 
 ---
 
@@ -268,6 +275,7 @@ For more information, please visit the [OWASP ASVS Project Page](https://owasp.o
 ---
 
 ## Summary
+
 A brief overview of the security posture based on the audit.
 
 **Coverage Statistics**:
@@ -285,9 +293,11 @@ A brief overview of the security posture based on the audit.
 *   **Review Debt**: [NEEDS_REVIEW Count] items require manual verification
 
 ## Findings
+
 Only include detailed blocks for items that have a security finding (Critical, High, Medium, Low). NEEDS_REVIEW items should be captured in the Verification Summary, not as detailed Findings.
 
 ### #[Internal_Num] - [req_id] - [section_name]
+
 - **Chapter**: [chapter_name]
 - **Section**: [section_name]
 - **ASVS ID**: [req_id]
@@ -308,6 +318,7 @@ Only include detailed blocks for items that have a security finding (Critical, H
 (Repeat for each finding)
 
 ## Verification Summary
+
 List all items that PASSED, are N/A, or NEEDS_REVIEW in this table.
 
 | ASVS ID (#) | Chapter<br>Section | Requirement | Status | Evidence |
@@ -362,7 +373,7 @@ These frameworks provide security controls by default. Mark as **✅ PASS** if u
 | **Vue** | XSS protection (auto-escaping) | `v-html` directive |
 | **Django** | CSRF protection | `@csrf_exempt`, `CSRF_COOKIE_SECURE=False` |
 | **Django** | SQL injection protection (ORM) | `raw()`, `extra()`, `RawSQL()` |
-| **Django** | XSS protection (auto-escaping) | `|safe`, `mark_safe()`, `{% autoescape off %}` |
+| **Django** | XSS protection (auto-escaping) | `|safe`,`mark_safe()`,`{% autoescape off %}` |
 | **Rails** | CSRF protection | `skip_before_action :verify_authenticity_token` |
 | **Rails** | SQL injection protection (ActiveRecord) | `find_by_sql`, string interpolation in `where()` |
 | **Rails** | XSS protection (auto-escaping) | `raw()`, `html_safe`, `<%==` |
@@ -378,10 +389,11 @@ These frameworks provide security controls by default. Mark as **✅ PASS** if u
 ### C. Contextual Triggers
 
 This skill should automatically activate or be suggested when:
-*   The user asks for a "security audit" or "security review".
-*   The user references "OWASP" or "ASVS".
-*   The user asks to "check for vulnerabilities".
-*   Critical security-sensitive code (auth logic, crypto, input handling) is selected or shared.
+
+- The user asks for a "security audit" or "security review".
+- The user references "OWASP" or "ASVS".
+- The user asks to "check for vulnerabilities".
+- Critical security-sensitive code (auth logic, crypto, input handling) is selected or shared.
 
 ---
 
@@ -442,6 +454,7 @@ This skill should automatically activate or be suggested when:
 
 ```markdown
 ### #12 - V2.1.2 - Password Security
+
 - **Chapter**: V2 Authentication
 - **Section**: V2.1 Password Security
 - **ASVS ID**: V2.1.2
@@ -460,6 +473,7 @@ This skill should automatically activate or be suggested when:
     .min(12, "Password must be at least 12 characters")
     .max(128, "Password must not exceed 128 characters"); // Changed from 50
   ```
+
 ```
 
 ### Example: ✅ PASS Entry (in Verification Summary)
