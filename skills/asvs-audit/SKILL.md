@@ -1,6 +1,6 @@
 ---
 name: asvs-audit
-version: 1.6.2
+version: 1.6.3
 asvs-version: 5.0.0
 description: Performs a comprehensive security audit of the provided codebase against the OWASP Application Security Verification Standard (ASVS) 5.0 Level 1. Use this when asked for a asvs or security audit
 ---
@@ -143,6 +143,10 @@ These rules exist to ensure different models/agents produce consistent results a
 3. **Verify Against ASVS**: Systematically check the code against the OWASP ASVS 5.0 verification requirements using the CSV file **bundled with this skill** at `./assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv` (i.e., relative to this `SKILL.md`, not the audited repo).
     - **Search Strategy (Crucial)**:
         - **Check Dependencies First**: For library-based requirements (cryptography, cookies, headers), ALWAYS read `package.json`, `requirements.txt`, `pom.xml`, etc., BEFORE searching source code. Identifying a library version is faster and more accurate.
+        - **Automated Dependency Checks**: When verifying requirements related to known vulnerabilities (e.g., V15.2):
+            - **NPM**: If `package.json` is present, run `npm audit` in the terminal.
+            - **Composer**: If `composer.json` is present, run `composer audit` in the terminal.
+            - **Evidence**: Use the command output (e.g., "found 5 vulnerabilities") as evidence. If the command fails (e.g., missing environment), fallback to checking versions in manifest files manually.
         - **Semantic vs. Grep**: Use `semantic_search` for abstract architectural concepts (e.g., "how is authentication architecture designed?") where keywords vary. Use `grep` or file search for specific tokens (e.g., `md5`, `dangerouslySetInnerHTML`, `sk-`).
     - **Use all items in the CSV file**: There are **EXACTLY 70** Level 1 requirements in this file. You must verify every single one.
     - **Assign an Internal Item Number (1 to 70)** to each requirement based on its sequential order in the CSV file.
@@ -234,12 +238,10 @@ You MUST output the saved audit report file strictly using the following Markdow
 ```markdown
 # Dawn Technology · OWASP ASVS 5.0 Level 1 · Security Audit Report
 
----
-
 **Initial Draft author**: AI Agent ([Model name and version])  
 **Reviewed & Finalized by**: [Security Auditor Name] [auditor.email@dawn.tech], Dawn ASVS Security Auditor  
 **Report Date**: YYYY-MM-DD  
-**Skill Version**: 1.6.1  
+**Skill Version**: 1.6.3  
 **ASVS Version**: 5.0.0  
 
 ## Application details
@@ -279,18 +281,18 @@ For more information, please visit the [OWASP ASVS Project Page](https://owasp.o
 A brief overview of the security posture based on the audit.
 
 **Coverage Statistics**:
-*   Total Level 1 Items: 70
-*   Items Verified: [Count] (Must be 70)
-*   **Result Breakdown**:
-    *   🔴 Critical: [Count]
-    *   🟠 High: [Count]
-    *   🟡 Medium: [Count]
-    *   🟢 Low: [Count]
-    *   ✅ PASS: [Count]
-    *   ⚠️ NEEDS_REVIEW: [Count]
-*   **Compliance Score**: [Percentage]% (Calculated as PASS / (Total Items - N/A Items - NEEDS_REVIEW Items) * 100)
-*   **Completeness Check**: [Total Reported] / [Total from CSV] (Should be 100%)
-*   **Review Debt**: [NEEDS_REVIEW Count] items require manual verification
+- Total Level 1 Items: 70
+- Items Verified: [Count] (Must be 70)
+- **Result Breakdown**:
+    - 🔴 Critical: [Count]
+    - 🟠 High: [Count]
+    - 🟡 Medium: [Count]
+    - 🟢 Low: [Count]
+    - ✅ PASS: [Count]
+    - ⚠️ NEEDS_REVIEW: [Count]
+- **Compliance Score**: [Percentage]% (Calculated as PASS / (Total Items - N/A Items - NEEDS_REVIEW Items) * 100)
+- **Completeness Check**: [Total Reported] / [Total from CSV] (Should be 100%)
+- **Review Debt**: [NEEDS_REVIEW Count] items require manual verification
 
 ## Findings
 
@@ -435,19 +437,19 @@ This skill should automatically activate or be suggested when:
 ## Summary
 
 **Coverage Statistics**:
-*   Total Level 1 Items: 70
-*   Items Verified: 70
-*   **Result Breakdown**:
-    *   🔴 Critical: 1
-    *   🟠 High: 3
-    *   🟡 Medium: 5
-    *   🟢 Low: 3
-    *   ✅ PASS: 51
-    *   ⚪ N/A: 5
-    *   ⚠️ NEEDS_REVIEW: 2
-*   **Compliance Score**: 82.3% (51 PASS / 62 evaluable items)
-*   **Completeness Check**: 70 / 70 (100%)
-*   **Review Debt**: 2 items require manual verification
+- Total Level 1 Items: 70
+- Items Verified: 70
+- **Result Breakdown**:
+    - 🔴 Critical: 1
+    - 🟠 High: 3
+    - 🟡 Medium: 5
+    - 🟢 Low: 3
+    - ✅ PASS: 51
+    - ⚪ N/A: 5
+    - ⚠️ NEEDS_REVIEW: 2
+- **Compliance Score**: 82.3% (51 PASS / 62 evaluable items)
+- **Completeness Check**: 70 / 70 (100%)
+- **Review Debt**: 2 items require manual verification
 ```
 
 ### Example: ❌ FAIL Finding
