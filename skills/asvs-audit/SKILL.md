@@ -249,7 +249,7 @@ You MUST output the saved audit report file strictly using the following Markdow
 **App Version**: [version/tag]  
 **Git Commit**: [short_hash]  
 
-## Tech Stack
+## Technology Stack
 
 **Language** | [Language]  
 **Framework** | [Framework]  
@@ -321,7 +321,7 @@ Only include detailed blocks for items that have a security finding (Critical, H
 
 ## Verification Summary
 
-List all items that PASSED, are N/A, or NEEDS_REVIEW in this table.
+List all items in this table.
 
 | ASVS ID (#) | Chapter<br>Section | Requirement | Status | Evidence |
 | :--- | :--- | :--- | :--- | :--- |
