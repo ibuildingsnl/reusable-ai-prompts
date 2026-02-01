@@ -1,6 +1,6 @@
 ---
 name: asvs-audit
-version: 1.6.3
+version: 1.6.4
 asvs-version: 5.0.0
 description: Performs a comprehensive security audit of the provided codebase against the OWASP Application Security Verification Standard (ASVS) 5.0 Level 1. Use this when asked for a asvs or security audit
 ---
@@ -43,7 +43,7 @@ These rules exist to ensure different models/agents produce consistent results a
 2. **Deterministic ordering**: Assign **Internal Item # = row order in the CSV** (first row is #1, last row is #70). **Do not sort** by `req_id` or any other field.
 3. **No truncation of requirements**: Wherever `Requirement` appears, you MUST include the **exact full `req_description` text** from the CSV for that row.
 4. **Avoid token-limit failures**: The report is large. Always write the full report to the required Markdown file via the `create_file` tool. Output only a brief status summary in chat and rely on the saved report for the complete 70-item content.
-5. **No silent skipping**: If a check cannot be verified due to missing context (e.g., repo not available, insufficient permissions, or tooling limitations), record it as a **FAIL** with the lowest justified severity (often 🟢 Low) and explain what evidence is missing.
+5. **No silent skipping**: If a check cannot be verified due to missing context (e.g., repo not available, insufficient permissions, or tooling limitations), record it as **⚠️ NEEDS_REVIEW** and explain what evidence is missing. Do not use FAIL for tooling issues.
 6. **Exactly 70 items**: Each Internal Item # from 1 to 70 must appear exactly once either as a Findings block or as a single row in the Verification Summary table.
 7. **Evidence is mandatory**: Every item must include an **Evidence** entry.
 
@@ -88,7 +88,7 @@ These rules exist to ensure different models/agents produce consistent results a
 ## Instructions
 
 1. **Profile the Technology Stack (Context Locking)**:
-    - **Create a "Context Manifest"**: Before starting the audit, explicitly define a "Context Manifest" in your thought process containing the **Language** (e.g., Python), **Framework** (e.g., Django), **Database**, **Libraries**, and **Project Type** (e.g., Monorepo, Microservice).
+    - **Create a "Context Manifest"**: Before starting the audit, explicitly define a "Context Manifest" and **print it to the chat window immediately**. This manifest must contain the **Language** (e.g., Python), **Framework** (e.g., Django), **Database**, **Libraries**, and **Project Type** (e.g., Monorepo, Microservice).
 
         **Example Context Manifest**:
 
@@ -143,10 +143,10 @@ These rules exist to ensure different models/agents produce consistent results a
 3. **Verify Against ASVS**: Systematically check the code against the OWASP ASVS 5.0 verification requirements using the CSV file **bundled with this skill** at `./assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv` (i.e., relative to this `SKILL.md`, not the audited repo).
     - **Search Strategy (Crucial)**:
         - **Check Dependencies First**: For library-based requirements (cryptography, cookies, headers), ALWAYS read `package.json`, `requirements.txt`, `pom.xml`, etc., BEFORE searching source code. Identifying a library version is faster and more accurate.
-        - **Automated Dependency Checks**: When verifying requirements related to known vulnerabilities (e.g., V15.2):
-            - **NPM**: If `package.json` is present, run `npm audit` in the terminal.
-            - **Composer**: If `composer.json` is present, run `composer audit` in the terminal.
-            - **Evidence**: Use the command output (e.g., "found 5 vulnerabilities") as evidence. If the command fails (e.g., missing environment), fallback to checking versions in manifest files manually.
+        - **Static Dependency Checks**: When verifying requirements related to known vulnerabilities (e.g., V15.2):
+            - **Avoid Execution**: Do NOT run `npm audit`, `pip audit`, or similar commands, as the environment is likely restricted.
+            - **Static Analysis**: Read lock files (`package-lock.json`, `yarn.lock`, `poetry.lock`) to identify outdated or vulnerable versions of key security libraries (e.g., check if `jsonwebtoken` is < 9.0.0).
+            - **Evidence**: Cite the version found in the lock file.
         - **Semantic vs. Grep**: Use `semantic_search` for abstract architectural concepts (e.g., "how is authentication architecture designed?") where keywords vary. Use `grep` or file search for specific tokens (e.g., `md5`, `dangerouslySetInnerHTML`, `sk-`).
     - **Use all items in the CSV file**: There are **EXACTLY 70** Level 1 requirements in this file. You must verify every single one.
     - **Assign an Internal Item Number (1 to 70)** to each requirement based on its sequential order in the CSV file.
@@ -278,7 +278,7 @@ For more information, please visit the [OWASP ASVS Project Page](https://owasp.o
 
 ## Summary
 
-A brief overview of the security posture based on the audit.
+[Replace this text with a brief executive summary of the security posture based on the audit findings. Highlight key strengths and critical weaknesses.]
 
 **Coverage Statistics**:
 - Total Level 1 Items: 70
@@ -296,7 +296,7 @@ A brief overview of the security posture based on the audit.
 
 ## Findings
 
-Only include detailed blocks for items that have a security finding (Critical, High, Medium, Low). NEEDS_REVIEW items should be captured in the Verification Summary, not as detailed Findings.
+[Instruction: Only include detailed blocks for items that have a security finding (Critical, High, Medium, Low). NEEDS_REVIEW items should be captured in the Verification Summary, not as detailed Findings.]
 
 ### #[Internal_Num] - [req_id] - [section_name]
 
@@ -321,7 +321,7 @@ Only include detailed blocks for items that have a security finding (Critical, H
 
 ## Verification Summary
 
-List all items in this table.
+[Instruction: List ALL 70 requirements in this table. Every single item from the CSV must appear here, sorted by Internal Item #.]
 
 | ASVS ID (#) | Chapter<br>Section | Requirement | Status | Evidence |
 | :--- | :--- | :--- | :--- | :--- |
