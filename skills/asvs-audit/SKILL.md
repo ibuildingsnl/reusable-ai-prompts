@@ -1,7 +1,8 @@
 ---
 name: asvs-audit
-version: 1.6.4
-asvs-version: 5.0.0
+metadata:
+    version: 1.6.4
+    asvs-version: 5.0.0
 description: Performs a comprehensive security audit of the provided codebase against the OWASP Application Security Verification Standard (ASVS) 5.0 Level 1. Use this when asked for a asvs or security audit
 ---
 
