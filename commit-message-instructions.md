@@ -22,7 +22,7 @@ All commit messages MUST strictly follow this format:
 
 ## 1. Header Line
 
-The header must be **less than 72 characters**.
+The header must be **72 characters or less**.
 
 For **Breaking Changes**, append `!` after the type/scope (e.g., `feat!: drop support for Node 12`) to signal a Major version bump.
 
@@ -35,7 +35,7 @@ Select the most specific type:
 - `docs`: 📚 Documentation changes
 - `style`: 💎 Code style/formatting (no logic change, whitespace, semi-colons)
 - `refactor`: 📦 Code refactoring (no functional change, no api change)
-- `perf`: 🚀 Performance improvements
+- `perf`: ⚡ Performance improvements
 - `test`: 🚨 Adding or updating tests
 - `chore`: 🛠️ Maintenance tasks, dependencies, build scripts
 - `ci`: ⚙️ CI/CD configuration changes
