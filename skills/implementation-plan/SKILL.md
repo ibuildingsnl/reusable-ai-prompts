@@ -2,6 +2,7 @@
 name: implementation-plan
 description: Create technical implementation plan and time estimation. Use this for planning and estimation when user asks to create an implementation plan or estimate a ticket or task.
 metadata:
+   author: "Martin Roest <martin.roest@dawn.tech>"
    version: 2.4.0
 ---
 
