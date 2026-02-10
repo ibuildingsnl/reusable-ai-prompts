@@ -2,7 +2,7 @@
 name: asvs-audit
 metadata:
     author: "Martin Roest <martin.roest@dawn.tech>"
-    version: 2.1.0
+    version: 2.2.0
     asvs-version: 5.0.0
 description: OWASP ASVS 5.0 Level 1 security audit with deterministic, evidence-based findings. Use this when asked for a security audit or asvs audit.
 ---
@@ -11,37 +11,27 @@ description: OWASP ASVS 5.0 Level 1 security audit with deterministic, evidence-
 
 **Role**: You are an Application Security Expert. Conduct systematic, evidence-based security audits against OWASP ASVS 5.0 Level 1 requirements using the bundled CSV as the canonical source.
 
-## 🎯 Audit Scope & Constraints
-
-### What You Will Do
-1. Profile the target codebase technology stack
-2. Systematically verify all 70 ASVS Level 1 requirements from the CSV
-3. Classify each requirement as: ✅ PASS | ⚪ N/A | ⚠️ NEEDS_REVIEW | ❌ FAIL → Severity
-4. For each finding, provide exact code location + evidence + remediation
-5. Generate a deterministic audit report file based on a skeleton template
-
-### What You Will NOT Do
-- Use a different ASVS requirement list
-- Provide generic remediation without code examples
-- Mark PASS without specific evidence
-- Create your own markdown report structure
-- Capture API keys, secrets, or PII in evidence sections
-
 ## 📋 Prerequisites
 
 **Tools Required**: Git (optional), File search, Grep, Terminal  
 **Access Required**: Full read access to target repository  
 **Inputs Required**: Target repo path, project name (derived from package.json/pyproject.toml/git repo name)  
-**CSV Location**: `./assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv` (skill workspace)
+**CSV Location**: `assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv` (skill workspace)
+**Template Location**: `references/REPORT-TEMPLATE.md` (skill workspace)
 
-## 🚨 Critical Rules (Non-Negotiable)
+## 🛑 Core Directives & Rules
 
-1. **CSV is canonical**: Use exact row order from CSV (items 1-70), never sort or reorder. `internal_num` = 1-based CSV row number (1–70), displayed as `#N` in all outputs.
-2. **Complete coverage**: All 70 items must be evaluated—no skipping
-3. **Evidence required**: Every item needs concrete proof (file:line, config value, framework feature, or N/A reason)
-4. **No truncation**: Include full `req_description` text from CSV in all outputs
-5. **Deterministic evaluation**: Use the Decision Tree for every requirement
-6. **Single write at end**: Build complete report in memory during Phase 3, write file once using `create_file`
+1. **Canonical Execution**: Use the skill bundled CSV (`assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv`) as the absolute source of truth. Evaluate all 70 items in strict order. Do not skip, sort, or reorder.
+2. **Evidence-Based Decisions**: Classify every item as ✅ PASS, ⚪ N/A, ⚠️ NEEDS_REVIEW, or ❌ FAIL.
+   - **PASS**: Requires proof of control (specific file:line, config, or framework default).
+   - **N/A**: Requires proof of irrelevance (e.g., "SQLi check on NoSQL DB").
+   - **FAIL**: Requires proof of missing control or bypass.
+3. **Safety First**: Never capture, print, or store API keys, secrets, PII, or unredacted credentials in evidence.
+4. **Strict Reporting**:
+   - Use `references/REPORT-TEMPLATE.md` exactly. Do not alter structure.
+   - Build report in memory. Write to disk once at the very end.
+5. **Deterministic Process**: Use the Decision Tree for every single requirement.
+
 
 ## Exclusions
 
@@ -70,128 +60,68 @@ Evidence MUST follow the strict formats defined in [`references/evidence-pattern
 
 ---
 
-## Decision Tree (Integrated Evaluation & Search)
+## 🌳 Decision Tree (Applies to EVERY requirement)
 
-Apply this 4-step process to **every** requirement. **STOP** searching immediately once you reach a definitive conclusion (Lazy Verification).
-
-**Step 1: Determine Applicability (Shallow Search)**
-*Source: `package.json`, file extensions, tech stack profile, top-level configs.*
-
-1.  **Is this irrelevant to the tech stack?** (e.g., Java requirements in a Node.js app)
+**Step 1: Applicability & Relevance**
+*Source: `package.json`, file extensions, tech stack.*
+1.  **Irrelevant to Tech Stack?** (e.g., Java reqs in Node.js)
     -   **YES** → 🛑 **STOP**. Mark **⚪ N/A** (Evidence: "Tech stack is X, not Y").
-    -   **NO** → Continue.
-2.  **Does the feature exist?** (e.g., searching "upload", "websocket", "sql" globally)
-    -   **NO** (Zero results found) → 🛑 **STOP**. Mark **⚪ N/A** (Evidence: "Feature X not used in codebase").
-    -   **UNCERTAIN** or **YES** → Proceed to Step 1.5.
+    -   **NO**  → Continue.
+2.  **Feature Missing?** (Zero results for feature search like "upload", "sql")
+    -   **YES** → 🛑 **STOP**. Mark **⚪ N/A** (Evidence: "Feature X not utilized").
+    -   **NO**  → Continue.
 
-**Step 2: Check Framework Defaults (Short-Circuit)**
-*Source: [`references/framework-defaults.md`](./references/framework-defaults.md) table, matched against detected framework from Phase 1.*
+**Step 2: Framework Defaults**
+*Source: [`references/framework-defaults.md`](./references/framework-defaults.md)*
+1.  **Covered by Framework?** (Match ASVS chapter to framework defaults table)
+    -   **YES** (and no bypass found) → 🛑 **STOP**. Mark **✅ PASS** (Evidence: `framework:<name>:<feature>`).
+    -   **NO** (or bypass found) → Continue.
 
-1.  **Is this requirement covered by a known framework default?** - Match the requirement's ASVS chapter against the framework table.
-    -   **YES** → Search for the corresponding **bypass pattern** from the table.
-        -   **Bypass found** → Mark **❌ FAIL** with bypass location. Proceed to Step 3.
-        -   **No bypass found** → 🛑 **STOP**. Mark **✅ PASS** (Evidence: `framework:<name>:<feature>`).
-    -   **NO** → Proceed to Step 2.
-
-**Step 3: Verify Controls (Deep Search)**
-*Source: Specific source files, middleware chain, security configuration, library definitions.*
-
-1.  **Is the control implemented?** (Search for specific libraries, config flags, or code patterns)
-    -   **YES** → 🛑 **STOP**. Mark **✅ PASS** (Evidence: `file:line` or config value).
-2.  **Is the control missing or bypassed?**
-    -   **YES** → Mark **❌ FAIL**. Proceed to Step 3.
-3.  **Is verification impossible?** (Binary file, obfuscated, or requires external server access)
-    -   **YES** → 🛑 **STOP**. Mark **⚠️ NEEDS_REVIEW** (Reason: "Cannot analyze binary/external system").
+**Step 3: Verify Implementation**
+*Source: Source code, config files.*
+1.  **Control Exists?** (Centralized middleware or distributed checks)
+    -   **YES** → 🛑 **STOP**. Mark **✅ PASS** (Evidence: `file:line`).
+    -   **UNCLEAR** → 🛑 **STOP**. Mark **⚠️ NEEDS_REVIEW**.
+2.  **Control Missing?**
+    -   **YES** → Proceed to Step 4 (FAIL).
 
 **Step 4: Assign Severity (Failures Only)**
-*Read full Source: [`references/severity-guidance.md`](./references/severity-guidance.md)*
+*Source: [`references/severity-guidance.md`](./references/severity-guidance.md)*
+1.  **Determine Impact**: Use ASVS Chapter baseline (e.g., Auth = High).
+2.  **Mark**: ❌ **FAIL** (Evidence: `missing:<feature>` or location of bypass).
 
-1.  Determine severity based on the ASVS Chapter (e.g., Auth = High).
-2.  **Override** only if you find specific code proving lower/higher impact.
-3.  **Output**: Must include location of failure (`file:line`) or the search query that yielded zero results (`missing:validated_jwt_middleware`).
+## ⚙️ Execution Flow
 
----
+### Phase 1: Setup & Context
 
-> **Important (CSV location)**: The ASVS Level 1 CSV is bundled with this *skill* itself, not the target application repo being audited.
-> It is located in this skill’s own `assets/` directory (a sibling of this `SKILL.md`).
->
-> **Path Resolution**:
->
-> - **Skill workspace path**: The directory containing this `SKILL.md` file (e.g., `/home/username/.copilot/skills/asvs-audit/`)
-> - **CSV absolute path**: `{skill_workspace}/assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv`
-> - When using tools, always resolve to the **absolute path** to avoid ambiguity
->
-> **Context Switching**: This audit operates across TWO directories:
->
-> 1. **Skill workspace**: Where this `SKILL.md` and `assets/` folder reside (for reading the CSV)
-> 2. **Target repo**: The application being audited (for all code analysis and git commands)
->
-> When running git commands or analyzing code, always explicitly reference or `cd` to the **target repo path** first.
-> When loading the ASVS CSV, use the **absolute skill workspace path**.
+1.  **Path Resolution (Critical)**:
+    -   **Skill Workspace**: Directory containing this `SKILL.md` and `assets/`. Use this path ONLY to load the CSV and references.
+    -   **Target Repo**: The user's application codebase. Use this path for ALL code analysis, file searching, and git commands.
+2.  **Context Gathering**:
+    -   **Profile Stack**: Identify language, framework (load defaults from `references/framework-defaults.md`), and database.
+    -   **Git Metadata**: Run `git rev-parse --short HEAD` in the **Target Repo**.
+    -   **Structure**: Detect monorepo structure. Prefix evidence with `[component]` if multiple exist.
+3.  **Load Canonical Assets**:
+    -   Load CSV from **Skill Workspace** `assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv`. - Use columns and row order (1-70) for the audit.
+    -   Load report template from **Skill Workspace** `references/REPORT-TEMPLATE.md`. DO NOT deviate from template while generating the report.
 
----
-
-## Execution Flow: 3 Phases
-
-The audit is divided into three sequential phases.
-
-### Phase 1: Prepare
-
-1. **Context Gathering** (Performance optimization—done once):
-   - Tech Stack Profile: Language, framework, database, key libraries
-   - Dependency Lists: Read `package.json`, `requirements.txt`, etc. once; store in memory
-   - Framework Defaults: Load framework-specific security features from [`references/framework-defaults.md`](./references/framework-defaults.md)
-   - Git Metadata: Run `git rev-parse --short HEAD` once; extract app version from manifest
-   - Directory Structure: Top-level directories, component types (respect exclusions)
-
-2. **Monorepo Detection**: If the target repo contains multiple services/packages, prompt the user to specify the target service. Default to the repository root if no guidance is given. Prefix all evidence with `[component]` per `references/evidence-patterns.md`.
-
-3. **Load CSV**:
-   - File: `./assets/OWASP_Application_Security_Verification_Standard_5.0.0_L1_en.csv` (in skill workspace)
-   - Columns: `chapter_id`, `chapter_name`, `section_id`, `section_name`, `req_id`, `req_description`, `L`
 
 ### Phase 2: Evaluate (Chapter by Chapter)
 
-Process chapters sequentially (V1 → ... → V14) to manage context window limits.
+Iterate through the CSV (maintain order 1-70). Apply the **Decision Tree** to each item.
 
-1.  **Load Scope**: Extract requirements for the current chapter only.
-2.  **Execute Decision Tree**:
-    -   Apply the **Step 1 → Step 2** logic for every requirement.
-    -   **Parallelization**: Within a chapter, batch independent grep/search operations for multiple requirements into parallel tool calls when no data dependency exists between them.
-    -   **Efficiency Constraint**: Use `grep` first. Only use `read_file` if grep indicates a match.
-    -   **Large File Handling**: If a targeted file is large (>500 lines), read only the **first 500** and **last 100** lines initially. Mark evidence as "(Sampled)".
-3.  **Accumulate & Flush**:
-    -   Save findings to your internal list.
-    -   Do not re-read files from previous chapters. Carry forward only the Tech Stack Profile and Dependency List. Begin each chapter with fresh searches against the target codebase.
+*   **Process**: Batch independent searches. Use `grep` first; `read_file` only on matches.
+*   **Large Files**: If >500 lines, read only head/tail.
+*   **Persistence**: Save findings to internal list. Do not re-read files across chapters.
 
-### Phase 3: Generate (Single Write)
+### Phase 3: Reporting
 
-Once all 70 items are evaluated:
-
-1. **Calculate Statistics**: Count PASS/FAIL/N/A/NEEDS_REVIEW; compute compliance score = PASS / (70 - N/A - NEEDS_REVIEW) × 100
-
-2. **Build Complete Report in Memory** (using `references/REPORT-TEMPLATE.md` as skeleton):
-   - **Essentials rules**: Adhere strictly to the template. Do not alter headings, sections, or layout.
-   - **Header sections**: report details, app details, tech stack, introduction
-   - **Findings section**: All FAIL items (in CSV order), exact req_description, evidence, remediation. `{{ internal_num }}` is the 1-based CSV row index.
-   - **Verification table**: Exactly 70 rows (Items 1–70, CSV order), no duplicates. `{{ internal_num }}` is the 1-based CSV row index.
-   - **Summary section**: Statistics, compliance score, review debt
-   - **Conclusion section**: Overall posture, key risks, recommended next steps
-
-3. **Validate Before Writing**:
-   - ✅ All 70 items present in verification table (no gaps, no duplicates)
-   - ✅ All FAIL items present in findings section (same order as CSV)
-   - ✅ Zero unreplaced `{{ placeholders }}`
-   - ✅ Zero `<!-- ... -->` comments
-   - ✅ Every FAIL item has evidence location (file:line or missing:what_was_searched)
-   - ✅ **🔒 No secrets, API keys, PII, or unredacted sensitive values in report**
-   - ✅ File name format: `{project_name}-ASVS-L1-audit-YYYY-MM-DD.md`
-
-4. **Write Entire Report** to file in **one operation** using `create_file` tool
-
-5. **Confirm Completion**:
-   - Output Coverage Statistics from the report to chat
-   - Confirm filename and path where report was saved
+1.  **Parse Report**: Use `references/REPORT-TEMPLATE.md` as the mandatory skeleton.
+    -   **Constraint**: The "Verification Control Table" MUST contain exactly 70 rows (Items 1-70).
+    -   **Findings**: Include detailed evidence/remediation for FAIL items only.
+    -   **Sanitization**: Ensure NO secrets/PII are present.
+2.  **Write to Disk**: Save to `{project_name}-ASVS-L1-audit-{YYYY-MM-DD}.md` in one operation.
+3.  **Completion**: Output coverage statistics and confirm file location.
 
 ---
 

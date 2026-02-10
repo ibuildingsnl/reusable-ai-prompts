@@ -1,7 +1,7 @@
 # Dawn Technology · OWASP ASVS 5.0 Level 1 · Security Audit Report
 
 **Initial Draft author**: AI Agent ({{ model_name }})  
-**Reviewed & Finalized by**: {{ security_auditor_name }} [{{ auditor_email }}], Dawn ASVS Security Auditor  
+**Reviewed & Finalized by**: _____________________
 **Report Date**: {{ report_date }}  
 **Skill Version**: 2.1.0  
 **ASVS Version**: 5.0.0  
@@ -54,7 +54,7 @@ For more information, please visit the [OWASP ASVS Project Page](https://owasp.o
   - 🟢 Low: {{ count_low }}
   - ✅ PASS: {{ count_pass }}
   - ⚠️ NEEDS_REVIEW: {{ count_needs_review }}
-- **Compliance Score**: {{ compliance_score }}% (Calculated as PASS / (Total Items - N/A Items - NEEDS_REVIEW Items) * 100)
+- **Compliance Score**: {{ compliance_score }}% <!-- Calculated as PASS / (Total Items - N/A Items - NEEDS_REVIEW Items) * 100 -->
 - **Completeness Check**: {{ total_reported }} / {{ total_from_csv }} (Should be 100%)
 - **Review Debt**: {{ count_needs_review }} items require manual verification
 
@@ -69,7 +69,7 @@ For more information, please visit the [OWASP ASVS Project Page](https://owasp.o
 - **Internal Item #**: {{ internal_num }}
 - **Requirement**: {{ req_description }}
 - **Severity**: {{ severity_icon }} {{ severity_level }}
-- **Location**: `{{ location_file_path }}:{{ line_number }}`
+- **Location**: `{{ location }}`
 - **Evidence**: `{{ evidence_details }}`
 - **Description**: {{ finding_description }}
 - **Remediation**:
@@ -99,5 +99,8 @@ For more information, please visit the [OWASP ASVS Project Page](https://owasp.o
 <!-- Fill: overall posture, key risks, next steps -->
 
 **Signed:**  
-_{{ report_date }}_  
-_{{ security_auditor_name }}_  
+Date: {{ report_date }}  
+Name: __________________
+Signature:  
+
+---
