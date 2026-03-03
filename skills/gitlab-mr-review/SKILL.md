@@ -12,7 +12,7 @@ metadata:
 The purpose of this skill is to provide constructive and comprehensive feedback on code changes. The primary goals are:
 - **Quality Assurance**: Identify bugs, potential logic errors, and edge cases.
 - **Maintainability**: Ensure code is readable, modular, and consistent with the existing architecture.
-- **Security**: Detect common security vulnerabilities and privacy risks.
+- **Security**: Detect common security vulnerabilities and privacy risks. Validate against OWASP Top 10 where applicable.
 - **Education**: Provide explanations and context for suggested changes to help the author grow.
 
 This workflow is **read-first** and **non-invasive**:
@@ -45,6 +45,7 @@ Before starting, verify the following tools are available. **If any tool is unav
 | `mcp_gitlab_update_draft_note` | Correct missing draft notes | Step 7-A |
 | `mcp_gitlab_bulk_publish_draft_notes` | Publish all drafts at once | Step 7-A |
 | `mcp_gitlab_approve_merge_request` | Approve the MR | Step 7-B |
+| `mcp_gitlab_execute_graphql` | Request changes via GraphQL mutation | Step 7-C |
 
 **Prohibited**: Do not use raw `curl` or `git` CLI commands for API interactions.
 
@@ -126,9 +127,14 @@ Store `worktree_path = "${REPO_ROOT}/.tmp/mr-review-{merge_request_iid}"` for St
 Analyse each prioritised file against the review baseline. For each changed section, check:
 
 - **Correctness** — logic errors, edge cases, incorrect conditionals.
-- **Maintainability** — architecture adherence, DRY, readability, clarity.
+- **Maintainability** — architecture adherence, DRY, SOLID, readability, clarity.
 - **Security** — OWASP Top 10, injection risks, exposed secrets, PII.
 - **Consistency** — coding standards, naming conventions, codebase patterns (from Step 1 baseline).
+- **Scope / Description alignment** *(if MR description is available)* — validate that the actual diff matches the stated intent in the MR description:
+  - Identify any changed files or logic that are **not mentioned** in the description (scope creep or unintended changes).
+  - Identify any requirements stated in the description that appear to be **missing** from the diff.
+  - Flag discrepancies as 🟡 **Improvement** findings with an explanation of what was expected vs. what was found.
+  - If the MR description is empty or absent, skip this check and note its absence in the report.
 
 **Determine exact line numbers** using the worktree (`read_file` from `{worktree_path}/{file_path}`).
 
@@ -243,10 +249,39 @@ After all draft notes are published (7-A complete):
 
 After all draft notes are published (7-A complete):
 
-1. Submit a review requesting changes using GitLab's review feature (embedded in the published draft notes).
-   - The inline comments themselves signal that changes are required.
-2. Inform the user that review comments have been posted and changes are required before re-review.
-   - The author can view all feedback and resubmit for another review.
+1. **Submit a formal "Request Changes" review** using the GitLab GraphQL mutation `mergeRequestRequestChanges`:
+
+   ```graphql
+   mutation RequestChanges($projectPath: ID!, $iid: String!) {
+     mergeRequestRequestChanges(input: { projectPath: $projectPath, iid: $iid }) {
+       mergeRequest {
+         iid
+         title
+         reviewers {
+           nodes {
+             username
+             mergeRequestInteraction {
+               reviewState
+             }
+           }
+         }
+       }
+       errors
+     }
+   }
+   ```
+
+   Call `mcp_gitlab_execute_graphql` with the query above and variables:
+   - `projectPath`: the full project path (e.g. `"group/project"`) — derived from the project identifier used in Step 2.
+   - `iid`: the merge request IID as a string.
+
+2. **Verify the response**:
+   - Confirm `errors` is empty.
+   - Check that the current user's `reviewState` in the response is `REQUESTED_CHANGES`.
+   - If the mutation returns errors (e.g., the user is not a reviewer), inform the user — the published inline comments still communicate the required changes.
+
+3. Include summary note to inform the user:
+   - Include a summary with key findings and post it as a overall comment on the MR.
 
 #### 7-D: Report Only (option 1)
 
@@ -278,7 +313,7 @@ After all actions are complete (or if option 1 was chosen):
    ```
 2. **Report back** to the user:
    - **For Report only (option 1)**: Confirm findings were presented; no actions taken.
-   - **For Posted comments/approval/request-changes**: Draft note IDs that were published, approval state (if applicable), MR state change (if applicable).
+   - **For Posted comments/approval/request-changes**: Draft note IDs that were published, approval state (if applicable), MR state change (if applicable) and include summary with key findings.
    - If any fallback path was used, explain why in one sentence.
    - If worktree cleanup failed, notify the user to run `git worktree prune` manually.
 
@@ -328,6 +363,6 @@ branch on boolean
 - [ ] **Step 2**: MR metadata fetched (title, branches, diffs refs, author), discussions loaded
 - [ ] **Step 3**: Worktree created at `.tmp/mr-review-{merge_request_iid}`
 - [ ] **Step 4**: Diff parsed, files prioritised, high/low priority files identified
-- [ ] **Step 5**: Code analysed, findings classified by severity, Comment Template fields populated
+- [ ] **Step 5**: Code analysed, findings classified by severity, description alignment validated (if available), Comment Template fields populated
 - [ ] **Step 6**: Report presented to user, action confirmed (options 1–4 selected)
 - [ ] **Step 7**: Appropriate sub-procedure executed (7-A/B/C/D/E), worktree removed, summary reported
