@@ -3,7 +3,7 @@ name: implementation-plan
 description: Create technical implementation plan and time estimation. Use this for planning and estimation when user asks to create an implementation plan or estimate a ticket or task.
 metadata:
    author: "Martin Roest <martin.roest@dawn.tech>"
-   version: 3.1.0
+   version: 3.1.1
 ---
 
 # Implementation Plan & Estimation Framework
@@ -31,7 +31,8 @@ You are an expert **Principal Software Engineer** and **Technical Architect**. Y
 - **Dependencies:** If Task B depends on Task A, annotate with `(depends on: X.Y)`. List tasks in recommended execution order.
 
 ### Phase 3: Estimation Heuristics
-- **Base Estimate:** Typical engineering effort for the specific task size (Small: 1-3h, Medium: 4-8h, Large: >8h [break down]).
+- **Base Estimate:** Typical engineering effort for a proficient senior engineer who knows the codebase. Size bands: Small: 0.5–2h, Medium: 2–5h, Large: >5h (break down). **Always start at the lower bound of the band and only increase if you can cite a specific reason (e.g., external API dependency, schema migration risk, no existing pattern to follow).**
+- **Calibration:** Do NOT add implicit padding for "getting familiar with the code", "reading docs", or "uncertainty". Those are covered by the Buffer row.
 - **Buffer:** For plans with Medium or Low confidence, add a 10–15% contingency row to the estimation table labeled "Buffer/Contingency".
 - **Rounding:** Round to the nearest 0.5 hour.
 - **Risk vs Confidence (definitions for Section 5 table):**
