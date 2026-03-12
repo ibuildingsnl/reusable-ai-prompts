@@ -3,19 +3,22 @@ name: gitlab-mr-review
 description: Review a GitLab Merge Request and provide findings, and post structured review comments with issue explanation plus pseudo code fixes. Use this skill when asked to review a Gitlab Merge request.
 metadata:
     author: "Martin Roest <martin.roest@dawn.tech>"
-    version: 1.2.0
+    version: 1.3.0
 ---
 
 # GitLab MR Review Workflow Skill
 
 ## Purpose
+
 The purpose of this skill is to provide constructive and comprehensive feedback on code changes. The primary goals are:
+
 - **Quality Assurance**: Identify bugs, potential logic errors, and edge cases.
 - **Maintainability**: Ensure code is readable, modular, and consistent with the existing architecture.
 - **Security**: Detect common security vulnerabilities and privacy risks. Validate against OWASP Top 10 where applicable.
 - **Education**: Provide explanations and context for suggested changes to help the author grow.
 
 This workflow is **read-first** and **non-invasive**:
+
 - Do not modify repository files.
 - Analyze MR content and discussions.
 - Post comments only when explicitly requested.
@@ -59,17 +62,18 @@ Follow these steps in order. Do not skip a step.
 
 Quickly identify the project's conventions and architecture:
 
-1. Search for key structural files (framework config, `README`, `CONTRIBUTING`, linting configs).
-2. Read project-level instructions (`CONTRIBUTING.md`, `.github/copilot-instructions.md`, development docs).
+1. Search for key structural files (framework config, `README`, linting configs).
+2. Read project-level instructions (`.github/copilot-instructions.md`, `AGENTS.md`, `CLAUD.md` development docs).
 3. Document: language, framework, architectural patterns, naming conventions, test strategy.
 4. Store these observations as your **review baseline** for code analysis.
 
 **Fallback if conventions are unclear**: Infer standards from the detected language/framework:
-   - **PHP**: PSR-12, PSR-4 (autoloading).
-   - **Python**: PEP 8, type hints (PEP 484).
-   - **JavaScript/TypeScript**: ESLint, Google/Airbnb style guides.
-   - **Go**: `gofmt`, idiomatic Go patterns.
-   - If still unclear, note this assumption in the final report and apply general best practices (SOLID, DRY, KISS).
+
+- **PHP**: PSR-12, PSR-4 (autoloading).
+- **Python**: PEP 8, type hints (PEP 484).
+- **JavaScript/TypeScript**: ESLint, Google/Airbnb style guides.
+- **Go**: `gofmt`, idiomatic Go patterns.
+- If still unclear, note this assumption in the final report and apply general best practices (SOLID, DRY, KISS).
 
 ---
 
@@ -117,7 +121,7 @@ Store `worktree_path = "${REPO_ROOT}/.tmp/mr-review-{merge_request_iid}"` for St
 3. Prioritise files for review:
    - **High priority**: core business logic, security-sensitive code, public APIs, data models.
    - **Lower priority**: generated files, lock files, migration snapshots, test fixtures.
-3. *Constraint*: If the diff exceeds 20 files, focus on high-priority files first and note skipped files in the report.
+4. *Constraint*: If the diff exceeds 20 files, focus on high-priority files first and note skipped files in the report.
    - **Option to user**: If >20 files are detected, ask the user whether they want a full review despite the scope; flag this in the report if high-priority files are skipped.
 
 ---
@@ -133,35 +137,35 @@ Analyse each prioritised file against the review baseline. For each changed sect
 - **Scope / Description alignment** *(if MR description is available)* — validate that the actual diff matches the stated intent in the MR description:
   - Identify any changed files or logic that are **not mentioned** in the description (scope creep or unintended changes).
   - Identify any requirements stated in the description that appear to be **missing** from the diff.
-  - Flag discrepancies as 🟡 **Improvement** findings with an explanation of what was expected vs. what was found.
+  - Flag discrepancies as 🟡 **Request for Change** findings with an explanation of what was expected vs. what was found.
   - If the MR description is empty or absent, skip this check and note its absence in the report.
 
-**Determine exact line numbers** using the worktree (`read_file` from `{worktree_path}/{file_path}`).
+**Determine exact line numbers** using the worktree (`read_file` from `{worktree_path}/{file_path}`):
 
-**Map diff lines to file line numbers**:
-- GitLab diffs show `old_line` (original file) and `new_line` (modified file).
-- For added/modified lines: use `new_line` in Step 7-A position object.
-- For deleted lines: use `old_line`.
-- **Important**: Line numbers in the position object MUST come from the GitLab diff API hunk boundaries, not arbitrary worktree file reads.
-
-**Validate line numbers for positioning accuracy** (before Step 7-A):
-1. For each finding, extract the applicable line number (`new_line` or `old_line`) from the diff hunk.
-2. Read the worktree file at that line: `read_file "${worktree_path}/{file_path}" startLine={line-1} endLine={line+1}`.
-3. Compare the worktree line content against the diff hunk context. If the content matches the diff, the line number is valid.
-4. If content mismatch is detected, the diff may be stale or the repository state has changed. Record this and prepare to fallback to file-level comments in Step 7-A.
+- For added/modified lines: extract `new_line` from the diff API hunk.
+- For deleted lines: extract `old_line` from the diff API hunk.
 
 **Record each issue:**
+
 - File path and exact line number(s).
 - Short description.
 - Risk/impact.
 - Suggested fix (pseudo code).
 
 **Classify by severity:**
-- 🔴 **Blocking** — severe bug, security vulnerability, breaking change, data loss risk. Must resolve before merge.
-- 🟡 **Improvement** — logic issue, performance concern, architectural inconsistency.
-- 🔵 **Nitpick** — style, naming, minor formatting.
+
+Use the following guidance table to categorize findings:
+
+| Severity | Category | Examples | Action |
+|----------|----------|----------|--------|
+| 🔵 **Optional** | Style, naming, minor formatting | Whitespace inconsistency, code comments, doc formatting | Can be addressed in a follow-up or ignored |
+| 🟡 **Request for Change** | Logic errors, architectural issues, configuration gaps | Incorrect conditionals, missing error handling, data consistency issues, missing translations, naming convention, typos in labels, unused imports, performance concerns, architectural inconsistency, breaking changes, API contract violations | Must be addressed before merge |
+| 🔴 **Request for Change** | Security vulnerabilities, severe bugs | SQL injection, XSS vulnerability, exposed secrets/credentials, authentication bypass, buffer overflow, data loss risk, race conditions, privilege escalation | Must be addressed before merge |
+
+**Note on Critical findings**: When a finding is a security vulnerability or severe bug, prefix the title with 🔴 (e.g., 🔴 **Request for Change — SQL injection vulnerability**) Always flag critical findings explicitly to the user before approval.
 
 **Before compiling the report**: Every finding must use the **Comment Template structure**
+
 - **READ FIRST**: "Comment Template" section below
 - **Title** with severity and short topic
 - **Relevant lines** — file path and line number(s)
@@ -180,6 +184,7 @@ Compile report grouped by severity with totals.
 Present the full findings report to the user **before taking any action**.
 
 The report must include:
+
 - MR title, source → target branch, author.
 - Finding totals per severity.
 - Each finding formatted **exactly** using the **Comment Template structure** defined above.
@@ -187,10 +192,11 @@ The report must include:
 **Pause here and await user confirmation.** Ask the user to choose one of the following actions:
 
 > **What would you like me to do next?**
+>
 > 1. **Report only** — no GitLab action, findings are shown above.
-> 2. **Post comments** — publish all findings as inline draft notes on the MR.
-> 3. **Post + Approve** — publish comments and approve the MR.
-> 4. **Post + Request Changes** — publish blocking comments and convert the MR to a draft (signals changes are required).
+> 2. **Post comments** — publish all findings on the MR.
+> 3. **Post + Approve** — publish all findings and approve the MR.
+> 4. **Post + Request Changes** — publish all findings on the MR (signals changes are required).
 
 Do not call any posting, approval, or state-change tool until the user selects one of the options above.
 
@@ -215,7 +221,7 @@ Post all findings as **inline draft notes**, then publish them in a single batch
    - Save each returned `draft_note_id` for verification.
 
 2. **Positioning Fallbacks** (if inline positioning fails):
-   - **Hunk mismatch or stale diff**: If the worktree line content doesn't match the diff hunk context (detected in Step 5 validation), the diff may be stale.
+   - **Hunk mismatch or stale diff**: If the diff positioning is rejected by the API, the diff may be stale or the repository state has changed.
      - Retry with `position_type: "file"` on the relevant file path.
      - Include exact file path and line references inside the comment body using the Comment Template structure.
    - **Renamed or moved files**: For files that have been renamed/moved in the MR:
@@ -228,13 +234,13 @@ Post all findings as **inline draft notes**, then publish them in a single batch
 
 3. **Proceed to draft verification**
 
-3. **Proceed to draft verification** — verify all draft notes were created successfully.
+4. **Proceed to draft verification** — verify all draft notes were created successfully.
 
-4. **Verify drafts** — call `mcp_gitlab_list_draft_notes` with `{project_id, merge_request_iid}`.
+5. **Verify drafts** — call `mcp_gitlab_list_draft_notes` with `{project_id, merge_request_iid}`.
    - Confirm the number of draft notes matches the number of findings.
    - Correct any missing notes using `mcp_gitlab_update_draft_note` before publishing.
 
-5. **Publish** — call `mcp_gitlab_bulk_publish_draft_notes` with `{project_id, merge_request_iid}`.
+6. **Publish** — call `mcp_gitlab_bulk_publish_draft_notes` with `{project_id, merge_request_iid}`.
    - All drafts become visible on the MR simultaneously.
 
 #### 7-B: Approve (option 3 only)
@@ -243,7 +249,7 @@ After all draft notes are published (7-A complete):
 
 1. Call `mcp_gitlab_approve_merge_request` with `{project_id, merge_request_iid}`.
 2. Confirm approval was recorded (check response for approval state).
-3. Only approve when **no Blocking (🔴) findings** were posted. If blocking findings exist, warn the user and ask to confirm they still want to approve despite the issues.
+3. Only approve when **no 🔴 critical findings** were posted. If critical security or severe bug findings exist, warn the user and ask to confirm they still want to approve despite the issues.
 
 #### 7-C: Request Changes (option 4 only)
 
@@ -296,6 +302,7 @@ If the user chose **"Report only"** (no GitLab action):
 After all actions are complete (or if option 1 was chosen):
 
 1. **Remove the git worktree with verification**:
+
    ```bash
    REPO_ROOT=$(git rev-parse --show-toplevel)
    WORKTREE_PATH="${REPO_ROOT}/.tmp/mr-review-{merge_request_iid}"
@@ -311,6 +318,7 @@ After all actions are complete (or if option 1 was chosen):
      echo "Run 'git worktree prune' manually to clean orphaned entries."
    fi
    ```
+
 2. **Report back** to the user:
    - **For Report only (option 1)**: Confirm findings were presented; no actions taken.
    - **For Posted comments/approval/request-changes**: Draft note IDs that were published, approval state (if applicable), MR state change (if applicable) and include summary with key findings.
@@ -324,7 +332,7 @@ After all actions are complete (or if option 1 was chosen):
 Refer to the **Comment Template structure** defined in Step 5. Here is a concrete example:
 
 ```text
-🟡 Improvement — avoid repeated magic string
+🟡 Request for Change — avoid repeated magic string
 
 Relevant lines
 - path/file.twig around line 108
@@ -346,19 +354,22 @@ branch on boolean
 ```
 
 ## Output Style for User
+
 - Keep summary concise.
 - State exactly what was posted (thread IDs/note IDs when available).
 - If a fallback path was used, explain why in one sentence.
 
 ## Guardrails
+
 - Post comments only when user selects option 2, 3, or 4 at the end of Step 6 (do not post for option 1).
-- Only approve (option 3) if **no Blocking (🔴) findings** — otherwise ask user re-confirmation.
+- Only approve (option 3) if **no 🔴 critical findings** — otherwise ask user re-confirmation.
 - Option 4 (request changes) relies on published review comments; no additional MR state change is required.
 - Never merge, alter code, or use alternate providers (GitHub, Jira, etc.).
 - Keep findings tied to concrete diff evidence from the branch worktree.
 - If the workflow is interrupted (user cancels, agent crashes), manually run `git worktree prune` to clean orphaned entries and recover disk space.
 
 ## Completion Checklist
+
 - [ ] **Step 1**: Codebase context gathered, conventions documented
 - [ ] **Step 2**: MR metadata fetched (title, branches, diffs refs, author), discussions loaded
 - [ ] **Step 3**: Worktree created at `.tmp/mr-review-{merge_request_iid}`
