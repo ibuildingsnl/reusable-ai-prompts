@@ -3,7 +3,7 @@ name: gitlab-mr-review
 description: Review a GitLab Merge Request and provide findings, and post structured review comments with issue explanation plus pseudo code fixes. Use this skill when asked to review a Gitlab Merge request.
 metadata:
     author: "Martin Roest <martin.roest@dawn.tech>"
-    version: 1.3.0
+    version: 1.3.1
 ---
 
 # GitLab MR Review Workflow Skill
@@ -49,6 +49,7 @@ Before starting, verify the following tools are available. **If any tool is unav
 | `mcp_gitlab_bulk_publish_draft_notes` | Publish all drafts at once | Step 7-A |
 | `mcp_gitlab_approve_merge_request` | Approve the MR | Step 7-B |
 | `mcp_gitlab_execute_graphql` | Request changes via GraphQL mutation | Step 7-C |
+| `mcp_gitlab_update_merge_request` | Add current user as reviewer (if needed) | Step 7-C |
 
 **Prohibited**: Do not use raw `curl` or `git` CLI commands for API interactions.
 
@@ -255,7 +256,20 @@ After all draft notes are published (7-A complete):
 
 After all draft notes are published (7-A complete):
 
-1. **Submit a formal "Request Changes" review** using the GitLab GraphQL mutation `mergeRequestRequestChanges`:
+1. **Validate reviewer assignment** — Before attempting the Request Changes mutation:
+   - Retrieve the current MR state using `mcp_gitlab_get_merge_request` with `{project_id, merge_request_iid}`.
+   - Extract the `reviewers` array from the response.
+   - Check if the current user (typically identified by GitLab session context) is listed in the reviewers.
+   - **If the current user is NOT a reviewer**: Call `mcp_gitlab_update_merge_request` to add yourself as a reviewer:
+     ```
+     Parameters:
+     - project_id: the project identifier
+     - merge_request_iid: the MR IID
+     - reviewer_ids: array containing the ID of the current user (retrieve from GitLab user context)
+     ```
+   - Confirm the update was successful before proceeding to step 2.
+
+2. **Submit a formal "Request Changes" review** using the GitLab GraphQL mutation `mergeRequestRequestChanges`:
 
    ```graphql
    mutation RequestChanges($projectPath: ID!, $iid: String!) {
@@ -281,13 +295,13 @@ After all draft notes are published (7-A complete):
    - `projectPath`: the full project path (e.g. `"group/project"`) — derived from the project identifier used in Step 2.
    - `iid`: the merge request IID as a string.
 
-2. **Verify the response**:
+3. **Verify the response**:
    - Confirm `errors` is empty.
    - Check that the current user's `reviewState` in the response is `REQUESTED_CHANGES`.
-   - If the mutation returns errors (e.g., the user is not a reviewer), inform the user — the published inline comments still communicate the required changes.
+   - If the mutation returns errors (e.g., GitLab API issue), inform the user with the error details — the published inline comments still communicate the required changes.
 
-3. Include summary note to inform the user:
-   - Include a summary with key findings and post it as a overall comment on the MR.
+4. Include summary note to inform the user:
+   - Include a summary with key findings and post it as an overall comment on the MR.
 
 #### 7-D: Report Only (option 1)
 
