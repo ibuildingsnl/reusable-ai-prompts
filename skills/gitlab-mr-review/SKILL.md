@@ -3,7 +3,7 @@ name: gitlab-mr-review
 description: Review a GitLab Merge Request and provide findings, and post structured review comments with issue explanation plus pseudo code fixes. Use this skill when asked to review a Gitlab Merge request.
 metadata:
     author: "Martin Roest <martin.roest@dawn.tech>"
-    version: 1.3.1
+    version: 2.0.0
 ---
 
 # GitLab MR Review Workflow Skill
@@ -28,13 +28,13 @@ This workflow is **read-first** and **non-invasive**:
 1. **MR identifiers**: Either an MR URL or `{project_id, merge_request_iid}`
 2. **Desired action** (to be confirmed in Step 6 report):
    - **Option 1**: Report only (show findings, no GitLab action).
-   - **Option 2**: Post comments (publish inline draft notes).
+   - **Option 2**: Discuss, (re)validate or update/delete a specific finding by ID.
    - **Option 3**: Post + Approve (comments + approval).
    - **Option 4**: Post + Request Changes (signal that changes are required).
 
 ## Required Tools
 
-Before starting, verify the following tools are available. **If any tool is unavailable**, stop and ask the user to provide an MR export (`.patch` file or raw diff) to review offline.
+Before starting, verify the following tools are available. **If any tool is unavailable**, stop and ask the user to install the Gitlab MCP (https://github.com/zereight/gitlab-mcp/tree/main) server.
 
 | Tool | Purpose | Step |
 |---|---|---|
@@ -42,7 +42,7 @@ Before starting, verify the following tools are available. **If any tool is unav
 | `mcp_gitlab_mr_discussions` | Retrieve existing review threads | Step 2 |
 | `mcp_gitlab_get_branch_diffs` | Retrieve diff between branches | Step 4 |
 | `file_search` / `semantic_search` / `read_file` | Explore codebase conventions | Step 1 |
-| `run_in_terminal` | Execute git worktree commands | Step 3, 7-E |
+| `run_in_terminal` | Execute git worktree commands | Step 3, 7-F |
 | `mcp_gitlab_create_draft_note` | Create inline review comments | Step 7-A |
 | `mcp_gitlab_list_draft_notes` | Verify draft notes created | Step 7-A |
 | `mcp_gitlab_update_draft_note` | Correct missing draft notes | Step 7-A |
@@ -172,7 +172,7 @@ Use the following guidance table to categorize findings:
 - **Relevant lines** — file path and line number(s)
 - **Issue** — what is problematic
 - **Why it matters** — risk/maintenance impact
-- **Suggested fix** (pseudo code)
+- **Suggested fix** (code and or configuration example)
 
 Do not invent alternative formats or omit any field.
 
@@ -188,14 +188,14 @@ The report must include:
 
 - MR title, source → target branch, author.
 - Finding totals per severity.
-- Each finding formatted **exactly** using the **Comment Template structure** defined above.
+- Each finding formatted **exactly** using the **Comment Template structure** defined above. **Prefix each finding with a sequential number (e.g., `**Finding #1**`) for easy reference in the chat.**
 
 **Pause here and await user confirmation.** Ask the user to choose one of the following actions:
 
 > **What would you like me to do next?**
 >
 > 1. **Report only** — no GitLab action, findings are shown above.
-> 2. **Post comments** — publish all findings on the MR.
+> 2. **Discuss / Refine** — discuss, (re)validate or update/delete a specific finding by ID.
 > 3. **Post + Approve** — publish all findings and approve the MR.
 > 4. **Post + Request Changes** — publish all findings on the MR (signals changes are required).
 
@@ -207,13 +207,13 @@ Do not call any posting, approval, or state-change tool until the user selects o
 
 Based on the user's choice from Step 6, follow the matching sub-procedure below.
 
-#### 7-A: Post Comments (options 2, 3, and 4)
+#### 7-A: Post Comments (options 3 and 4)
 
 Post all findings as **inline draft notes**, then publish them in a single batch.
 
 1. **Create draft notes** — for each finding, call `mcp_gitlab_create_draft_note`:
    - Provide `project_id`, `merge_request_iid`.
-   - Set `body` to the rendered Comment Template output from Step 7.
+   - Set `body` to the rendered Comment Template output from Step 7. **Important: Strip the sequential finding number before posting; numbers are for the report only.**
    - Provide a `position` object (inline diff comment):
      - `position_type: "text"` for code diffs (use `"file"` only if diff positioning fails).
      - `base_sha`, `head_sha`, `start_sha` from Step 2 diff refs.
@@ -300,18 +300,27 @@ After all draft notes are published (7-A complete):
    - Check that the current user's `reviewState` in the response is `REQUESTED_CHANGES`.
    - If the mutation returns errors (e.g., GitLab API issue), inform the user with the error details — the published inline comments still communicate the required changes.
 
-4. Include summary note to inform the user:
-   - Include a summary with key findings and post it as an overall comment on the MR.
+4. **Post an Overall Summary Comment on the MR**:
+   - You must explicitly post a general comment/note on the MR containing a high-level summary of the key findings.
 
 #### 7-D: Report Only (option 1)
 
 If the user chose **"Report only"** (no GitLab action):
 
 1. Skip Steps 7-A, 7-B, and 7-C.
-2. Proceed directly to 7-E cleanup (worktree removal below).
+2. Proceed directly to 7-F cleanup (worktree removal below).
 3. Summary to user: Provide the findings report and note that no draft notes were posted.
 
-#### 7-E: Clean Up
+#### 7-E: Discuss / Refine Finding (option 2)
+
+If the user chose **"Discuss / Refine"**:
+
+1. Ask the user which Finding ID they want to discuss or refine.
+2. Discuss the specifics with the user. Update the finding text, severity, or suggested fix based on the consensus.
+3. Remove or keep the finding based on the discussion.
+4. **Return directly to Step 6**: Summarize the updated findings and present the action options again. Do not proceed to Clean Up yet.
+
+#### 7-F: Clean Up
 
 After all actions are complete (or if option 1 was chosen):
 
@@ -343,7 +352,7 @@ After all actions are complete (or if option 1 was chosen):
 
 ## Comment Template Example
 
-Refer to the **Comment Template structure** defined in Step 5. Here is a concrete example:
+Refer to the **Comment Template structure** defined in Step 5. Here is a concrete example (in the chat report, prefix this with `**Finding #N**`):
 
 ```text
 🟡 Request for Change — avoid repeated magic string
@@ -358,7 +367,7 @@ Issue
 Why this matters
 - Rename risk and inconsistent behavior.
 
-Suggested fix (pseudo code)
+Suggested fix (example)
 {# parent #}
 set boolean once
 pass boolean to include
@@ -375,7 +384,7 @@ branch on boolean
 
 ## Guardrails
 
-- Post comments only when user selects option 2, 3, or 4 at the end of Step 6 (do not post for option 1).
+- Post comments only when user selects option 3 or 4 at the end of Step 6 (do not post for option 1).
 - Only approve (option 3) if **no 🔴 critical findings** — otherwise ask user re-confirmation.
 - Option 4 (request changes) relies on published review comments; no additional MR state change is required.
 - Never merge, alter code, or use alternate providers (GitHub, Jira, etc.).
@@ -390,4 +399,4 @@ branch on boolean
 - [ ] **Step 4**: Diff parsed, files prioritised, high/low priority files identified
 - [ ] **Step 5**: Code analysed, findings classified by severity, description alignment validated (if available), Comment Template fields populated
 - [ ] **Step 6**: Report presented to user, action confirmed (options 1–4 selected)
-- [ ] **Step 7**: Appropriate sub-procedure executed (7-A/B/C/D/E), worktree removed, summary reported
+- [ ] **Step 7**: Appropriate sub-procedure executed (7-A/B/C/D/E/F), worktree removed, summary reported
