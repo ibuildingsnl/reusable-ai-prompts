@@ -1,9 +1,9 @@
 ---
 name: gitlab-mr-review
-description: Review a GitLab Merge Request and provide findings, and post structured review comments with issue explanation plus pseudo code fixes. Use this skill when asked to review a Gitlab Merge request.
+description: Review a GitLab Merge Request and provide findings, and post structured review comments with issue explanation plus code fixes. Use this skill when asked to review a Gitlab Merge request.
 metadata:
   author: "Martin Roest <martin.roest@dawn.tech>"
-  version: 2.1.0
+  version: 3.5.0
 ---
 
 # GitLab MR Review Workflow Skill
@@ -21,32 +21,11 @@ This workflow is **read-first** and **non-invasive**:
 
 - Do not modify repository files.
 - Analyze MR content and discussions.
-- Post comments only when explicitly requested.
+- Post comments, update MR only when explicitly requested.
 
 ## Inputs Required
 
 1. **MR identifiers**: Either an MR URL or `{project_id, merge_request_iid}`
-
-## Required Tools
-
-Before starting, verify the following tools are available. **If any tool is unavailable**, stop and ask the user to install the Gitlab MCP (https://github.com/zereight/gitlab-mcp/tree/main) server.
-
-| Tool                                            | Purpose                                        | Step        |
-| ----------------------------------------------- | ---------------------------------------------- | ----------- |
-| `mcp_gitlab_get_merge_request`                  | Fetch MR metadata (title, branches, diff refs) | Step 2      |
-| `mcp_gitlab_mr_discussions`                     | Retrieve existing review threads               | Step 2      |
-| `mcp_gitlab_get_branch_diffs`                   | Retrieve diff between branches                 | Step 4      |
-| `file_search` / `semantic_search` / `read_file` | Explore codebase conventions                   | Step 1      |
-| `run_in_terminal`                               | Execute git worktree commands                  | Step 3, 7-F |
-| `mcp_gitlab_create_draft_note`                  | Create inline review comments                  | Step 7-A    |
-| `mcp_gitlab_list_draft_notes`                   | Verify draft notes created                     | Step 7-A    |
-| `mcp_gitlab_update_draft_note`                  | Correct missing draft notes                    | Step 7-A    |
-| `mcp_gitlab_bulk_publish_draft_notes`           | Publish all drafts at once                     | Step 7-A    |
-| `mcp_gitlab_approve_merge_request`              | Approve the MR                                 | Step 7-B    |
-| `mcp_gitlab_execute_graphql`                    | Request changes via GraphQL mutation           | Step 7-C    |
-| `mcp_gitlab_update_merge_request`               | Add current user as reviewer (if needed)       | Step 7-C    |
-
-**Prohibited**: Do not use raw `curl` or `git` CLI commands for API interactions.
 
 ---
 
@@ -54,14 +33,47 @@ Before starting, verify the following tools are available. **If any tool is unav
 
 Follow these steps in order. Do not skip a step.
 
-### Step 1 — Gather Codebase Context
+### Step 0 — Verify Capabilities
 
-Quickly identify the project's conventions and architecture:
+Before proceeding, verify you have GitLab integration capabilities available (reading MRs, reading discussions, fetching diffs, leaving review notes, executing GraphQL). You also require terminal access to checkout git worktrees.
 
-1. Search for key structural files (framework config, `README`, linting configs).
-2. Read project-level instructions (`.github/copilot-instructions.md`, `AGENTS.md`, `CLAUD.md` development docs).
-3. Document: language, framework, architectural patterns, naming conventions, test strategy.
-4. Store these observations as your **review baseline** for code analysis.
+- If GitLab capabilities are missing, stop immediately and ask the user to install the GitLab MCP server: https://github.com/zereight/gitlab-mcp/tree/main
+
+---
+
+### Step 1 — Fetch GitLab MR Details
+
+Retrieve all MR metadata needed for the review.
+
+1. Fetch the MR details using your GitLab capabilities.
+   - Extract: title, description, source/target branches, author, labels, milestone, diff refs (`base_sha`, `start_sha`, `head_sha`).
+   - **Note diff refs**: These are required in Step 7-A for inline comment positioning.
+2. Fetch existing MR discussions and review threads.
+   - Note all open and resolved threads to avoid posting duplicate feedback AND to systematically verify if the requested changes have been implemented in the latest code.
+3. Note the MR description for stated intent, linked issues, and breaking-change flags.
+
+---
+
+### Step 2 — Checkout MR Branch
+
+Use `run_in_terminal` to create an isolated worktree — even if the source branch is already checked out locally. **The purpose of this isolated worktree is to allow you to understand the full codebase, thoroughly trace control logic across files, and evaluate the true architectural impact of the proposed changes.**
+
+```bash
+git fetch origin {source_branch}
+git worktree add .tmp/mr-review-{merge_request_iid} {source_branch}
+```
+
+Store `worktree_path = ".tmp/mr-review-{merge_request_iid}"` for Steps 3–5. **Read-only enforced** — do not modify files in the worktree.
+
+---
+
+### Step 3 — Gather Codebase Context
+
+With the MR branch checked out, use `runSubagent` (`Explore` agent) to analyze the project conventions relevant to the proposed changes. To avoid wasting time on large monorepos, direct the subagent specifically. Use a prompt similar to:
+
+> "Explore the `.tmp/mr-review-{merge_request_iid}` directory. Focus primarily on the modules and adjacent dependencies affected by the MR diff, while briefly checking for global configs (e.g., framework config, `README`, linting configs, `.github/copilot-instructions.md`). Report: language, framework, architectural patterns, naming conventions, and test strategy relevant to the changed files."
+
+Store the subagent's full response as your **review baseline** for code analysis.
 
 **Fallback if conventions are unclear**: Infer standards from the detected language/framework:
 
@@ -73,242 +85,114 @@ Quickly identify the project's conventions and architecture:
 
 ---
 
-### Step 2 — Fetch GitLab MR Details
+### Step 4 — Retrieve, Parse, and Trace the Diff
 
-Retrieve all MR metadata needed for the review.
-
-1. Call `mcp_gitlab_get_merge_request` with `{project_id, merge_request_iid}`.
-   - Extract: title, description, source/target branches, author, labels, milestone, diff refs (`base_sha`, `start_sha`, `head_sha`).
-   - **Note diff refs**: These are required in Step 7-A for inline comment positioning.
-2. Call `mcp_gitlab_mr_discussions` to load existing review threads.
-   - Note all open and resolved threads to avoid posting duplicate feedback AND to systematically verify if the requested changes have been implemented in the latest code.
-3. Note the MR description for stated intent, linked issues, and breaking-change flags.
-
----
-
-### Step 3 — Checkout MR Branch
-
-Use the `run_in_terminal` tool to fetch the source branch and create an isolated, read-only worktree for file access. Keep track of this path for file access later.
-
-```bash
-git fetch origin {source_branch}
-git worktree add .tmp/mr-review-{merge_request_iid} {source_branch}
-```
-
-Store `worktree_path = ".tmp/mr-review-{merge_request_iid}"` for Steps 4–5. **Read-only enforced** — do not modify files in the worktree.
-
----
-
-### Step 4 — Retrieve and Parse the Diff
-
-1. Call `mcp_gitlab_get_branch_diffs` using the source and target branches.
-2. Build a file-change inventory: list each changed file with its change type (added / modified / deleted).
-3. Prioritise files for review:
+1. Retrieve the diffs between the source and target branches using your GitLab capabilities.
+2. Build a file-change inventory: list each changed file with its change type (added / modified / deleted). **All changed files MUST be reviewed**; do not skip any files.
+3. Prioritise the review order to build context progressively:
    - **High priority**: core business logic, security-sensitive code, public APIs, data models.
    - **Lower priority**: generated files, lock files, migration snapshots, test fixtures.
-   - For high-priority files, use `read_file` to review the surrounding lines or the entire file. Do not base your analysis solely on the diff hunks, as you need to understand the structural context and local patterns of the file.
-4. _Constraint_: If the diff exceeds 20 files, focus on high-priority files first and note skipped files in the report.
-   - **Option to user**: If >20 files are detected, ask the user whether they want a full review despite the scope; flag this in the report if high-priority files are skipped.
+   - **Within each tier, sort files alphabetically by path** to guarantee a deterministic traversal order.
+4. **Context Constraints (Large MRs)**: If the MR contains more than 15 changed files or massive diffs causing context limits, warn the user. Propose reviewing the changes in chunks of 5 files at a time to maintain high-quality analysis. Ask for confirmation before processing the chunks.
+5. **Trace Control Logic and Impact**: Do not evaluate diffs in isolation.
+   - For changes in logic, read the expanded surrounding context or the full file to grasp the complete execution path.
+   - Actively trace dependencies by exploring where modified functions, classes, or variables are invoked across the codebase (e.g., using codebase search capabilities or the `Explore` subagent).
+   - Evaluate cross-file execution paths to definitively determine the impact and identify potential downstream breakages.
 
 ---
 
 ### Step 5 — Analyze & Classify Findings
 
-Analyse each prioritised file against the review baseline. For each changed section, check:
+Evaluate the diff against these four lenses using your analytical capabilities:
 
-- **Correctness** — logic errors, edge cases, incorrect conditionals.
-- **Maintainability** — architecture adherence, DRY, SOLID, readability, clarity.
-- **Security** — OWASP Top 10, injection risks, exposed secrets, PII.
-- **Consistency** — coding standards, naming conventions, codebase patterns (from Step 1 baseline).
-- **Unaddressed Feedback** — review existing MR comments and open discussion threads. Validate whether the requested changes have been fully addressed in the latest diff. If a comment is not fully addressed, flag it as a **Request for Change** finding and explain what is still missing.
-- **Scope / Description alignment** _(if MR description is available)_ — validate that the actual diff matches the stated intent in the MR description:
-  - Identify any changed files or logic that are **not mentioned** in the description (scope creep or unintended changes).
-  - Identify any requirements stated in the description that appear to be **missing** from the diff.
-  - Flag discrepancies as **Request for Change** findings with an explanation of what was expected vs. what was found.
-  - If the MR description is empty or absent, skip this check and note its absence in the report.
+1. **Security (OWASP Top 10)**: Injection flaws, exposed credentials, auth bypasses. Confirm patterns are reachable. (Severity: Security violation)
+2. **Correctness & Logic**: Incorrect conditionals, missing error handling, off-by-one errors. (Verify control-flow boundaries). (Severity: Request for Change)
+3. **Architecture & Maintainability**: SOLID violations, naming conventions against the baseline, breaking API contracts. (Severity: Request for Change or Optional)
+4. **Scope & Consistency**: Unaddressed feedback from existing threads, missing translations, description alignment. (Severity: Request for Change)
 
-**CRITICAL: Validate Before Flagging (Reduce False Positives)**
-Do not rely blindly on the diff. Before recording an issue, use your tools (`grep_search`, `read_file`, `vscode_listCodeUsages`) to validate the context:
+**Finding Schema & Rules**:
+Only report findings with tangible evidence (do not report without validation). To ensure strict adherence to the schema, organize your findings internally using the following schema. **CRITICAL: Do NOT print this JSON schema to the chat.** Use it purely as an internal data structure to ensure you have collected all required fields, then proceed to format the output as requested in Step 6.
 
-1. **Check callers/callees:** Is the variable already sanitized upstream? Is the error handled in a parent wrapper?
-2. **Read the full file:** Use `read_file` to understand surrounding logic. Does your suggested fix break existing conventions in the same file?
-3. **If in doubt, drop it:** If you cannot definitively confirm a bug or hazard by exploring the workspace, assume it is intentional and do not raise a finding.
-
-**Exclusions (Do Not Flag):**
-
-- Missing docblocks or comments (unless explicitly requested).
-- Framework-standard boilerplate that cannot be altered.
-- Code formatting/spacing issues (rely on linters/formatters instead).
-- Missing or incomplete Merge Request description (flag only if description is present but does not align with changes).
-
-**Determine exact line numbers** from the API diff (`mcp_gitlab_get_branch_diffs`). Use the worktree (`read_file`) only to read surrounding code for context. Your comments must use `new_line` (for additions/modifications) or `old_line` (for deletions) provided by the diff hunk.
-
-**Record each issue:**
-
-- File path and exact line number(s).
-- Short description.
-- Risk/impact.
-- Suggested fix (pseudo code).
-
-**Classify by severity:**
-
-Use the following guidance table to categorize findings:
-
-| Severity                  | Category                                               | Examples                                                                                                                                                                                                                                        | Action                                     |
-| ------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| **Optional**              | Style, naming, minor formatting                        | Whitespace inconsistency, code comments, doc formatting                                                                                                                                                                                         | Can be addressed in a follow-up or ignored |
-| **Request for Change**    | Logic errors, architectural issues, configuration gaps | Incorrect conditionals, missing error handling, data consistency issues, missing translations, naming convention, typos in labels, unused imports, performance concerns, architectural inconsistency, breaking changes, API contract violations | Must be addressed before merge             |
-| 🔴 **Request for Change** | Security vulnerabilities, severe bugs                  | SQL injection, XSS vulnerability, exposed secrets/credentials, authentication bypass, buffer overflow, data loss risk, race conditions, privilege escalation                                                                                    | Must be addressed before merge             |
-
-**Note on Critical findings**: When a finding is a security vulnerability or severe bug, prefix the title with 🔴 (e.g., 🔴 **Request for Change — SQL injection vulnerability**) Always flag critical findings explicitly to the user before approval.
-
-**Comment Structure**: Keep finding descriptions simple, conversational, and direct. Do not use structural headers (like "Observation:" or "Impact:"). Use the following simple flow:
-
-1. **Title**: Severity icon/label + short constructive topic (e.g., `**Request for Change — avoid repeated magic string**`).
-2. **Context**: Relevant file path and exact line references in italics.
-3. **Observation & Impact**: Briefly explain what you noticed and why it matters in 1-2 sentences. Use a peer-to-peer tone (e.g., "I noticed", "Have we considered").
-4. **Suggested approach**: A polite, actionable recommendation, ideally with a correct pseudo-code block or concise instructions.
-
-Do not invent alternative formats or omit any field.
-
-Compile report grouped by severity with totals.
+```json
+[
+  {
+    "id": "<file-path>:<new_line>:<rule-slug>",
+    "file": "path/to/file.ext",
+    "line": "<precise line number from diff>",
+    "severity": "optional | request-for-change | security-violation",
+    "category": "<one of the 4 lenses>",
+    "title": "<short constructive label>",
+    "observation": "<1-2 sentences>",
+    "suggestion": "<code block or instruction>"
+  }
+]
+```
 
 ---
 
 ### Step 6 — Present Findings to the User
 
-Present the full findings report to the user **before taking any action**.
+Present the grouped findings report to the user **before taking any action**.
 
 The report must include:
 
 - MR title, source → target branch, author.
 - Finding totals per severity.
-- Each finding formatted **exactly** using the **Comment Structure** defined above. **Prefix each finding with a sequential number (e.g., `**Finding #1**`) for easy reference in the chat.**
+- Each finding formatted exactly using the **Comment Template** defined below, prefixed with a reference ID (e.g., `**Finding #1 — src/Auth.php:88:sql-injection**`).
 
-🛑 **HARD STOP**: You must pause here and wait for user input. Present the report and explicitly ask the user the following:
-
-```
-**What would you like me to do next?**
-
-1. **Report only** - do nothing, clean-up worktree
-2. **Discuss/Refine/Drop/Promote findings** - Engage in discussion or modify findings as needed
-3. **Post + Approve** - Publish findings and approve the MR
-4. **Post + Request Changes** - Publish findings and request to update MR
-
-```
-
-Do NOT proceed to Step 7 or execute any tools yet. Stop and wait for the user's response. Then continue to Step 7 based on the user's choice.
+**HARD STOP**: Pause here and ask the user how they would like to proceed. Provide options naturally: discussing/refining findings, posting comments, approving the MR or requesting changes. Do NOT proceed until the user issues a clear directive.
 
 ---
 
 ### Step 7 — Execute Chosen Action (Only When Confirmed)
 
-Based on the user's choice from Step 6, follow the matching sub-procedure below.
+Based on the user's instructions from Step 6, take the appropriate action:
 
-#### 7-A: Post Comments (options 3 and 4)
+#### 7-A: Post Comments
 
-Post all findings as **inline draft notes**, then publish them in a single batch.
+Post all approved findings as visible inline notes on the MR. First, create them using `create_draft_note` in a loop, and then IMMEDIATELY publish the batch using `bulk_publish_draft_notes`.
 
-1. **Create draft notes** — for each finding, call `mcp_gitlab_create_draft_note`:
-   - Provide `project_id`, `merge_request_iid`.
-   - Set `body` to the rendered comment output from Step 7. **Important: Strip the sequential finding number before posting; numbers are for the report only.**
-   - Provide a `position` object (inline diff comment):
-     - `position_type: "text"` for code diffs (use `"file"` only if diff positioning fails).
-     - `base_sha`, `head_sha`, `start_sha` from Step 2 diff refs.
-     - **File path**: Use `new_path` for added/modified files; use `old_path` for deleted files.
-     - **Line numbers from diff API**: Use `new_line` (for added/modified lines) or `old_line` (for deleted lines) as extracted and validated in Step 5. These MUST correspond to actual hunk boundaries from `mcp_gitlab_get_branch_diffs`.
-   - Save each returned `draft_note_id` for verification.
+- You MUST provide `base_sha`, `start_sha`, and `head_sha` in the `position` object.
+- **Position Mapping**: If commenting on an added/modified line, use `new_line` and `new_path`. For deleted lines, use `old_line` and `old_path`. Set `position_type: "text"`.
+- **Publishing**: After all notes are successfully created, you MUST call `bulk_publish_draft_notes`. The user expects published notes, not drafts.
+- **Fallback**: If inline positioning fails (e.g., "Line is out of bounds" error), catch the error gracefully and fall back to posting a general MR discussion note (using `create_merge_request_discussion_note`) that indicates the target file and line.
 
-2. **Positioning Fallbacks** (if inline positioning fails):
-   If GitLab rejects the inline position (e.g., due to a stale diff, renamed file, or API error), do not repeatedly guess line numbers. Fall back immediately to a **file-level comment** (`position_type: "file"`) on the relevant file path and state the intended exact lines inside the comment body.
+#### 7-B: Approve
 
-3. **Proceed to draft verification** — verify all draft notes were created successfully.
+If the user requests approval, approve the MR via the GitLab MCP. If there are security violations, confirm the user explicitly wants to approve despite the risks.
 
-4. **Verify drafts** — call `mcp_gitlab_list_draft_notes` with `{project_id, merge_request_iid}`.
-   - Confirm the number of draft notes matches the number of findings.
-   - Correct any missing notes using `mcp_gitlab_update_draft_note` before publishing.
+#### 7-C: Request Changes
 
-5. **Publish** — call `mcp_gitlab_bulk_publish_draft_notes` with `{project_id, merge_request_iid}`.
-   - All drafts become visible on the MR simultaneously.
+If the user wishes to formally request changes, use the GitLab execute GraphQL tool to both assign the current user as a reviewer and mark their review state as requesting changes. **Use the following exact query string** to trigger the state change:
 
-#### 7-B: Approve (option 3 only)
+```graphql
+mutation requestChanges($projectPath: ID!, $iid: String!) {
+  mergeRequestSetReviewer(
+    input: {
+      projectPath: $projectPath
+      iid: $iid
+      reviewerState: REQUEST_CHANGES
+    }
+  ) {
+    mergeRequest {
+      id
+    }
+    errors
+  }
+}
+```
 
-After all draft notes are published (7-A complete):
+_Note: Pass the full project path and MR IID as GraphQL variables._
 
-1. Call `mcp_gitlab_approve_merge_request` with `{project_id, merge_request_iid}`.
-2. Confirm approval was recorded (check response for approval state).
-3. Only approve when **no 🔴 critical findings** were posted. If critical security or severe bug findings exist, warn the user and ask to confirm they still want to approve despite the issues.
+#### 7-D/E: Refine or Report Only
 
-#### 7-C: Request Changes (option 4 only)
+If the user wants no action taken, proceed to step 8 - cleanup. If they want to refine, discuss the findings, update them, and repeat Step 6.
 
-After all draft notes are published (7-A complete):
+---
 
-1. **Validate reviewer assignment** — Before attempting the Request Changes mutation:
-   - Retrieve the current MR state using `mcp_gitlab_get_merge_request` with `{project_id, merge_request_iid}`.
-   - Extract the `reviewers` array from the response.
-   - Check if the current user (typically identified by GitLab session context) is listed in the reviewers.
-   - **If the current user is NOT a reviewer**: Call `mcp_gitlab_update_merge_request` to add yourself as a reviewer:
-     ```
-     Parameters:
-     - project_id: the project identifier
-     - merge_request_iid: the MR IID
-     - reviewer_ids: array containing the ID of the current user (retrieve from GitLab user context)
-     ```
-   - Confirm the update was successful before proceeding to step 2.
+### Step 8 — Clean Up
 
-2. **Submit a formal "Request Changes" review** using the GitLab GraphQL mutation `mergeRequestRequestChanges`:
-
-   ```graphql
-   mutation RequestChanges($projectPath: ID!, $iid: String!) {
-     mergeRequestRequestChanges(
-       input: { projectPath: $projectPath, iid: $iid }
-     ) {
-       mergeRequest {
-         iid
-         title
-         reviewers {
-           nodes {
-             username
-             mergeRequestInteraction {
-               reviewState
-             }
-           }
-         }
-       }
-       errors
-     }
-   }
-   ```
-
-   Call `mcp_gitlab_execute_graphql` with the query above and variables:
-   - `projectPath`: the full project path (e.g. `"group/project"`) — derived from the project identifier used in Step 2.
-   - `iid`: the merge request IID as a string.
-
-3. **Verify the response**:
-   - Confirm `errors` is empty.
-   - Check that the current user's `reviewState` in the response is `REQUESTED_CHANGES`.
-   - If the mutation returns errors (e.g., GitLab API issue), inform the user with the error details — the published inline comments still communicate the required changes.
-
-#### 7-D: Report Only (option 1)
-
-If the user chose **"Report only"** (no GitLab action):
-
-1. Skip Steps 7-A, 7-B, and 7-C.
-2. Proceed directly to 7-F cleanup (worktree removal below).
-3. Summary to user: Provide the findings report and note that no draft notes were posted.
-
-#### 7-E: Discuss / Refine Finding (option 2)
-
-If the user chose **"Discuss / Refine"**:
-
-1. Ask the user which Finding ID they want to discuss or refine.
-2. Discuss the specifics with the user. Update the finding text, severity, or suggested fix based on the consensus.
-3. Remove, keep or update the finding based on the discussion.
-4. **Return directly to Step 6**: Summarize the updated findings and present the action options again. Do not proceed to Clean Up yet.
-
-#### 7-F: Clean Up
-
-After all actions are complete (or if option 1 was chosen):
+This step is always executed, regardless of which option was chosen in Step 6.
 
 1. **Remove the git worktree with verification**:
 
@@ -318,36 +202,48 @@ After all actions are complete (or if option 1 was chosen):
 
 2. **Report back** to the user:
    - **For Report only (option 1)**: Confirm findings were presented; no actions taken.
-   - **For Posted comments/approval/request-changes**: Draft note IDs that were published, approval state (if applicable), MR state change (if applicable) and include summary with key findings.
+   - **For Posted comments/approval/request-changes**: Published note IDs, approval state (if applicable), MR state change (if applicable) and include summary with key findings.
    - If any fallback path was used, explain why in one sentence.
    - If worktree cleanup failed, notify the user to run `git worktree prune` manually.
 
 ---
 
-## Comment Template Example
+## Comment Template
 
-Keep the review comments simple and directly actionable. In the chat report, prefix with `**Finding #N**` (remove this prefix when posting to GitLab):
+Keep finding descriptions simple, conversational, and direct. Do not use structural headers (like "Observation:" or "Impact:"). Use the following flow for every finding:
+
+1. **Title**: Short constructive topic (e.g., `**Avoid repeated magic string**`).
+2. **Observation & Impact**: Briefly explain what you noticed and why it matters in 1-2 sentences. Use a peer-to-peer tone (e.g., "I noticed", "Have we considered").
+3. **Context**: Relevant file path and exact line references in italics.
+4. **Suggested approach**: A polite, actionable recommendation, ideally with a suggested code block or concise instructions.
+
+Do not invent alternative formats or omit any field. In the chat report, prefix with `**Finding #N — <id>**` (strip the prefix when posting to GitLab).
+
+**Example:**
 
 ````text
-**Request for Change — avoid repeated magic string**
+**Avoid repeated magic string**
 
-*Relevant lines: `path/file.twig` around line 108 and `path/partial.twig` around line 99*
+I noticed that `"pending"` is hardcoded in multiple places. If the status name changes, missing a spot would cause inconsistent behavior.
 
-I noticed that we're repeating this literal condition in a few different files. If this logic ever changes, missing a spot could lead to inconsistent behavior.
+*Relevant lines: `src/Service/OrderService.php` around line 42 and `src/Handler/CheckoutHandler.php` around line 17*
 
-Could we set the boolean once and pass it down instead? Something like this:
+Could we extract it to a constant? Something like:
 
-```twig
-{# parent #}
-set boolean once
-pass boolean to include
+```php
+// define once
+const STATUS_PENDING = 'pending';
 
-{# child #}
-branch on boolean
+// use everywhere
+if ($order->getStatus() === self::STATUS_PENDING) {
+    // handle pending state
+}
 ```
+
+_Use the same language as the changed file in the suggestion block._
 ````
 
-## Output Style for User
+## Output Style for chat
 
 - Keep summary concise.
 - State exactly what was posted (thread IDs/note IDs when available).
@@ -355,19 +251,19 @@ branch on boolean
 
 ## Guardrails
 
-- Post comments only when user selects option 3 or 4 at the end of Step 6 (do not post for option 1).
-- Only approve (option 3) if **no 🔴 critical findings** — otherwise ask user re-confirmation.
-- Option 4 (request changes) relies on published review comments; no additional MR state change is required.
 - Never merge, alter code, or use alternate providers (GitHub, Jira, etc.).
+- Do not use raw `curl` or `git` CLI commands for GitLab API interactions; use MCP tools only.
 - Keep findings tied to concrete diff evidence from the branch worktree.
 - If the workflow is interrupted (user cancels, agent crashes), manually run `git worktree prune` to clean orphaned entries and recover disk space.
 
 ## Completion Checklist
 
-- [ ] **Step 1**: Codebase context gathered, conventions documented
-- [ ] **Step 2**: MR metadata fetched (title, branches, diffs refs, author), discussions loaded
-- [ ] **Step 3**: Worktree created at `.tmp/mr-review-{merge_request_iid}`
+- [ ] **Step 0**: Capabilities verified
+- [ ] **Step 1**: MR metadata fetched (title, branches, diff refs, author), discussions loaded
+- [ ] **Step 2**: Worktree created at `.tmp/mr-review-{merge_request_iid}`
+- [ ] **Step 3**: Codebase context gathered, conventions documented
 - [ ] **Step 4**: Diff parsed, files prioritised, high/low priority files identified
-- [ ] **Step 5**: Code analysed, findings classified by severity, description alignment validated (if available), Comment Structure fields populated
-- [ ] **Step 6**: Report presented to user, action confirmed (options 1–4 selected)
-- [ ] **Step 7**: Appropriate sub-procedure executed (7-A/B/C/D/E/F), worktree removed, summary reported
+- [ ] **Step 5**: Diff analyzed against the four lenses and compiled into structured findings
+- [ ] **Step 6**: Report presented to user, action confirmed
+- [ ] **Step 7**: Appropriate sub-procedure executed (7-A/B/C/D/E)
+- [ ] **Step 8**: Worktree removed, summary reported to user
