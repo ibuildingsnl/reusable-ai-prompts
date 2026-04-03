@@ -3,7 +3,7 @@ name: gitlab-mr-review
 description: Review a GitLab Merge Request and provide findings, and post structured review comments with issue explanation plus code fixes. Use this skill when asked to review a Gitlab Merge request.
 metadata:
   author: "Martin Roest <martin.roest@dawn.tech>"
-  version: 3.5.0
+  version: 3.6.0
 ---
 
 # GitLab MR Review Workflow Skill
@@ -163,15 +163,43 @@ If the user requests approval, approve the MR via the GitLab MCP. If there are s
 
 #### 7-C: Request Changes
 
-If the user wishes to formally request changes, use the GitLab execute GraphQL tool to both assign the current user as a reviewer and mark their review state as requesting changes. **Use the following exact query string** to trigger the state change:
+If the user wishes to formally request changes, proceed in two distinct steps.
+
+**Step 1 — Verify reviewer assignment (separate check)**
+
+Query the MR to get the current user's username and the existing reviewers list:
 
 ```graphql
-mutation requestChanges($projectPath: ID!, $iid: String!) {
-  mergeRequestSetReviewer(
+query getMRReviewers($projectPath: ID!, $iid: String!) {
+  currentUser {
+    username
+  }
+  project(fullPath: $projectPath) {
+    mergeRequest(iid: $iid) {
+      reviewers {
+        nodes {
+          username
+        }
+      }
+    }
+  }
+}
+```
+
+If the current user is **not** in the reviewers list, add them using `APPEND` to preserve existing reviewers:
+
+```graphql
+mutation addSelfAsReviewer(
+  $projectPath: ID!
+  $iid: String!
+  $username: String!
+) {
+  mergeRequestSetReviewers(
     input: {
       projectPath: $projectPath
       iid: $iid
-      reviewerState: REQUEST_CHANGES
+      reviewerUsernames: [$username]
+      operationMode: APPEND
     }
   ) {
     mergeRequest {
@@ -182,7 +210,22 @@ mutation requestChanges($projectPath: ID!, $iid: String!) {
 }
 ```
 
-_Note: Pass the full project path and MR IID as GraphQL variables._
+**Step 2 — Request changes**
+
+Once reviewer assignment is confirmed, submit the request-changes state:
+
+```graphql
+mutation requestChanges($projectPath: ID!, $iid: String!) {
+  mergeRequestRequestChanges(input: { projectPath: $projectPath, iid: $iid }) {
+    mergeRequest {
+      id
+    }
+    errors
+  }
+}
+```
+
+_Note: `mergeRequestRequestChanges` requires GitLab 17.10+ (added February 2026). On older instances it may not exist — inspect the `errors` array and inform the user if the mutation fails. Pass the full project path and MR IID as GraphQL variables._
 
 #### 7-D/E: Refine or Report Only
 
