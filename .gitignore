@@ -5,3 +5,6 @@
 /config.json
 .github/
 /ide
+/mcp-config.json
+/session-*
+/mcp-oauth-*
