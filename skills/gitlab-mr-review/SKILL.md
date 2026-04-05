@@ -3,7 +3,7 @@ name: gitlab-mr-review
 description: Review a GitLab Merge Request and provide findings, and post structured review comments with issue explanation plus code fixes. Use this skill when asked to review a Gitlab Merge request.
 metadata:
   author: "Martin Roest <martin.roest@dawn.tech>"
-  version: 3.6.0
+  version: 3.6.1
 ---
 
 # GitLab MR Review Workflow Skill
@@ -60,10 +60,10 @@ Use `run_in_terminal` to create an isolated worktree — even if the source bran
 
 ```bash
 git fetch origin {source_branch}
-git worktree add .tmp/mr-review-{merge_request_iid} {source_branch}
+git worktree add .worktrees/mr-review-{merge_request_iid} {source_branch}
 ```
 
-Store `worktree_path = ".tmp/mr-review-{merge_request_iid}"` for Steps 3–5. **Read-only enforced** — do not modify files in the worktree.
+Store `worktree_path = ".worktrees/mr-review-{merge_request_iid}"` for Steps 3–5. **Read-only enforced** — do not modify files in the worktree.
 
 ---
 
@@ -71,7 +71,7 @@ Store `worktree_path = ".tmp/mr-review-{merge_request_iid}"` for Steps 3–5. **
 
 With the MR branch checked out, use `runSubagent` (`Explore` agent) to analyze the project conventions relevant to the proposed changes. To avoid wasting time on large monorepos, direct the subagent specifically. Use a prompt similar to:
 
-> "Explore the `.tmp/mr-review-{merge_request_iid}` directory. Focus primarily on the modules and adjacent dependencies affected by the MR diff, while briefly checking for global configs (e.g., framework config, `README`, linting configs, `.github/copilot-instructions.md`). Report: language, framework, architectural patterns, naming conventions, and test strategy relevant to the changed files."
+> "Explore the `.worktrees/mr-review-{merge_request_iid}` directory. Focus primarily on the modules and adjacent dependencies affected by the MR diff, while briefly checking for global configs (e.g., framework config, `README`, linting configs, `.github/copilot-instructions.md`). Report: language, framework, architectural patterns, naming conventions, and test strategy relevant to the changed files."
 
 Store the subagent's full response as your **review baseline** for code analysis.
 
@@ -240,7 +240,7 @@ This step is always executed, regardless of which option was chosen in Step 6.
 1. **Remove the git worktree with verification**:
 
    ```bash
-   git worktree remove .tmp/mr-review-{merge_request_iid} --force
+   git worktree remove .worktrees/mr-review-{merge_request_iid} --force
    ```
 
 2. **Report back** to the user:
@@ -303,7 +303,7 @@ _Use the same language as the changed file in the suggestion block._
 
 - [ ] **Step 0**: Capabilities verified
 - [ ] **Step 1**: MR metadata fetched (title, branches, diff refs, author), discussions loaded
-- [ ] **Step 2**: Worktree created at `.tmp/mr-review-{merge_request_iid}`
+- [ ] **Step 2**: Worktree created at `.worktrees/mr-review-{merge_request_iid}`
 - [ ] **Step 3**: Codebase context gathered, conventions documented
 - [ ] **Step 4**: Diff parsed, files prioritised, high/low priority files identified
 - [ ] **Step 5**: Diff analyzed against the four lenses and compiled into structured findings
